@@ -157,6 +157,8 @@ function renderDetail(){
 }
 /* ---------- deep link & share ---------- */
 const eventUrl=id=>`${location.origin}${location.pathname}?e=${encodeURIComponent(id)}`;
+// 공유용 주소: /s/<ID> 는 서버에서 이벤트 포스터·제목을 미리보기(메타태그)로 붙여줘요. 로컬 파일로 열었을 땐 일반 주소를 써요.
+const shareUrl=id=>location.protocol.startsWith("http")?`${location.origin}/s/${encodeURIComponent(id)}`:eventUrl(id);
 function setUrl(id){try{history.replaceState(null,"",id?eventUrl(id):location.pathname)}catch(_){}}
 function openDetail(id){S.open=id;S.confirm=false;$("detailScrim").hidden=false;renderDetail();if(S.events.has(id))setUrl(id)}
 function closeDetail(){S.open=null;S.confirm=false;$("detailScrim").hidden=true;setUrl(null)}
@@ -188,7 +190,7 @@ let shareEvent=null;
 function openShare(e){
   shareEvent=e;
   $("shareTitle").textContent=e.title;$("shareMeta").textContent=shareText(e);
-  $("shareUrl").value=eventUrl(e.id);$("copyBtn").textContent="복사";
+  $("shareUrl").value=shareUrl(e.id);$("copyBtn").textContent="복사";
   $("kakaoShareBtn").hidden=!KAKAO_KEY;
   $("nativeShareBtn").hidden=!navigator.share;
   $("shareHint").hidden=!!KAKAO_KEY;
@@ -202,7 +204,7 @@ async function copyShareUrl(){
 async function kakaoShare(){
   const e=shareEvent;if(!e)return;
   try{
-    const K=await loadKakao();const url=eventUrl(e.id),img=shareImage(e);
+    const K=await loadKakao();const url=shareUrl(e.id),img=shareImage(e);
     const link={mobileWebUrl:url,webUrl:url};
     if(img)K.Share.sendDefault({objectType:"feed",content:{title:e.title,description:shareText(e),imageUrl:img,link},buttons:[{title:"일정 보기",link}]});
     else K.Share.sendDefault({objectType:"text",text:`${e.title}\n${shareText(e)}`,link,buttonTitle:"일정 보기"});
@@ -210,7 +212,7 @@ async function kakaoShare(){
 }
 async function nativeShare(){
   const e=shareEvent;if(!e||!navigator.share)return;
-  try{await navigator.share({title:e.title,text:`${e.title} · ${shareText(e)}`,url:eventUrl(e.id)})}catch(_){}
+  try{await navigator.share({title:e.title,text:`${e.title} · ${shareText(e)}`,url:shareUrl(e.id)})}catch(_){}
 }
 
 function renderReview(){
