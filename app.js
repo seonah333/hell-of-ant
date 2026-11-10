@@ -3,9 +3,12 @@
 "use strict";
 
 /* ---------- constants & helpers ---------- */
-const GENRES=["TECHNO","HOUSE","TECH HOUSE","TRANCE","HARD DANCE","DNB","DUBSTEP","BASS","EDM","POP","ROCK","LIVE","ETC"];
+const GENRES=["MEET UP","TECHNO","HOUSE","TECH HOUSE","TRANCE","HARD DANCE","DNB","DUBSTEP","BASS","EDM","POP","ROCK","LIVE","ETC"];
 const WD=["SUN","MON","TUE","WED","THU","FRI","SAT"];
 const PAGE=24;
+const HL_GENRES=new Set(["MEET UP"]);   // 보라색 테두리로 강조할 장르
+const hl=g=>HL_GENRES.has(g)?" hl":"";
+const gtags=list=>`<div class="gtags">${list.map(x=>`<span class="${hl(x).trim()}">${esc(x)}</span>`).join("")}</div>`;
 const DATE_OPTS=[{id:"upcoming",label:"예정 전체"},{id:"today",label:"오늘"},{id:"week",label:"7일 이내"},{id:"month30",label:"30일 이내"},{id:"past",label:"지난 일정"}];
 const $=id=>document.getElementById(id);
 const pad=n=>String(n).padStart(2,"0");
@@ -31,7 +34,7 @@ const CFG=window.HOA_CONFIG||{};
 const sb=(CFG.supabaseUrl&&CFG.supabaseAnonKey&&window.supabase)?window.supabase.createClient(CFG.supabaseUrl,CFG.supabaseAnonKey):null;
 const flyerUrl=path=>path&&sb?sb.storage.from("flyers").getPublicUrl(path).data.publicUrl:"";
 const fromRow=r=>({id:r.id,status:r.status,title:r.title,start:r.start_date,end:r.end_date||"",time:r.start_time||"",venue:r.venue||"",
-  genres:r.genres||[],url:r.url||"",memo:r.memo||"",flyerPath:r.flyer_path||"",flyer:flyerUrl(r.flyer_path),credit:r.credit||"",
+  genres:r.genres||[],url:r.url||"",kakao:r.kakao_url||"",memo:r.memo||"",flyerPath:r.flyer_path||"",flyer:flyerUrl(r.flyer_path),credit:r.credit||"",
   postedBy:r.posted_by_name||"",contact:(r.event_contacts&&(Array.isArray(r.event_contacts)?r.event_contacts[0]:r.event_contacts))||null});
 
 /* ---------- filtering ---------- */
@@ -68,12 +71,13 @@ function renderFilters(){
     `<label class="tag kr" aria-pressed="${!!S.pick}"><select id="pick" aria-label="연도와 월 선택"><option value="">날짜 선택</option>${monthOptions().map(m=>`<option value="${m}" ${m===S.pick?"selected":""}>${m.replace("-",".")}</option>`).join("")}</select></label>`;
   const gc={};list("genre").forEach(e=>(e.genres||[]).forEach(g=>gc[g]=(gc[g]||0)+1));
   $("genreTags").innerHTML=`<button class="tag" data-genre="" aria-pressed="${!S.genre}">ALL</button>`+
-    GENRES.filter(g=>gc[g]||g===S.genre).map(g=>`<button class="tag" data-genre="${esc(g)}" aria-pressed="${S.genre===g}">${esc(g)} <span class="n">${gc[g]||0}</span></button>`).join("");
+    GENRES.filter(g=>gc[g]||g===S.genre).map(g=>`<button class="tag${hl(g)}" data-genre="${esc(g)}" aria-pressed="${S.genre===g}">${esc(g)} <span class="n">${gc[g]||0}</span></button>`).join("");
 }
 function genInner(e){return `<span>${md(e.start)} ${wd(e.start)}</span><b>${esc(e.title)}</b>`}
 /* default poster: config.js 의 defaultPoster 이미지가 있으면 플라이어 없는 일정에 사용 */
 const DEFAULT_POSTER=typeof CFG.defaultPoster==="string"&&/^[\w./-]+$/.test(CFG.defaultPoster)?CFG.defaultPoster:"";
 const DEFAULT_TEXT=CFG.defaultPosterText!==false;
+const KAKAO_RE=/^https:\/\/(open|pf|qr)\.kakao\.com\//i;
 function flyerHTML(e){
   if(e.flyer)return `<img src="${esc(e.flyer)}" alt="${esc(e.title)} 플라이어" loading="lazy" data-h="${hue(e.title)}" data-gen="${esc(genInner(e))}">`;
   if(DEFAULT_POSTER)return `<div class="gen custom${DEFAULT_TEXT?"":" bare"}" style="--h:${hue(e.title)};--poster-img:url('${DEFAULT_POSTER}')" role="img" aria-label="${esc(e.title)}">${DEFAULT_TEXT?genInner(e):""}</div>`;
@@ -102,7 +106,7 @@ function renderGrid(){
         <div class="date">${md(e.start)} ${wd(e.start)}${range}</div>
         <div class="ctitle">${esc(e.title)}</div>
         ${e.time?`<div class="ctime">${esc(e.time)}</div>`:""}
-        ${(e.genres||[]).length?`<div class="gtags">${e.genres.map(x=>`<span>${esc(x)}</span>`).join("")}</div>`:""}
+        ${(e.genres||[]).length?gtags(e.genres):""}
       </div></button>`;
   }).join("");
   $("moreBtn").hidden=items.length<=S.shown;
@@ -138,13 +142,14 @@ function renderDetail(){
   <div class="dinfo">
     <div class="date">${md(e.start)} ${wd(e.start)}${range}</div>
     <h2>${esc(e.title)}</h2>
-    ${(e.genres||[]).length?`<div class="gtags">${e.genres.map(x=>`<span>${esc(x)}</span>`).join("")}</div>`:""}
+    ${(e.genres||[]).length?gtags(e.genres):""}
     <div class="facts">
       <div><b>TIME</b><span>${esc(e.time||"미정")}</span></div>
       <div><b>VENUE</b><span>${esc(e.venue||"미정")}</span></div>
     </div>
     ${e.memo?`<div class="memo">${esc(e.memo)}</div>`:""}
     ${e.url&&/^https?:\/\//i.test(e.url)?`<a class="link" href="${esc(e.url)}" target="_blank" rel="noopener">예매·정보 링크 열기 ↗</a>`:""}
+    ${e.kakao&&KAKAO_RE.test(e.kakao)?`<a class="kakao" href="${esc(e.kakao)}" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4C7 4 3 7.1 3 11c0 2.5 1.7 4.7 4.2 5.9L6.5 20l3.6-2.3c.6.1 1.2.1 1.9.1 5 0 9-3.1 9-7s-4-6.8-9-6.8z" fill="currentColor"/></svg><span><b>카카오톡 오픈채팅방</b><small>이 행사 같이 갈 사람 모이는 방</small></span><i aria-hidden="true">↗</i></a>`:""}
     <div class="who reg">등록: ${esc(e.postedBy||"운영진")}${credit}</div>
     ${S.isAdmin?(S.confirm?`<div class="confirm">“${esc(e.title)}” 일정을 삭제할까요? 되돌릴 수 없어요.<div class="acts"><button class="pill danger kr" id="delYes">삭제</button><button class="pill kr" id="delNo">취소</button></div></div>`:
       `<div class="acts"><button class="pill kr" id="editBtn">수정</button><button class="pill kr" id="delBtn">삭제</button></div>`):""}
@@ -165,7 +170,7 @@ function renderReview(){
         <div class="date">${md(e.start)} ${wd(e.start)}${range}${e.time?` · ${esc(e.time)}`:""}</div>
         <div class="ctitle">${esc(e.title)}</div>
         ${e.venue?`<div class="venue">${esc(e.venue)}</div>`:""}
-        ${(e.genres||[]).length?`<div class="gtags">${e.genres.map(x=>`<span>${esc(x)}</span>`).join("")}</div>`:""}
+        ${(e.genres||[]).length?gtags(e.genres):""}
         ${e.memo?`<div class="memo">${esc(e.memo)}</div>`:""}
         ${e.url&&/^https?:\/\//i.test(e.url)?`<a class="link" href="${esc(e.url)}" target="_blank" rel="noopener">링크 확인 ↗</a>`:""}
         <div class="who">제보자 ${c.instagram?`<a href="https://www.instagram.com/${encodeURIComponent(c.instagram)}/" target="_blank" rel="noopener">@${esc(c.instagram)}</a>`:"알 수 없음"}${e.credit?" · 표시 동의":" · 표시 비동의"}</div>
@@ -286,7 +291,7 @@ $("loginForm").addEventListener("submit",async e=>{
 
 /* ---------- form ---------- */
 let fGenres=new Set();
-function renderFormGenres(){$("f-genres").innerHTML=GENRES.map(g=>`<button type="button" class="tag" data-fg="${esc(g)}" aria-pressed="${fGenres.has(g)}">${esc(g)}</button>`).join("")}
+function renderFormGenres(){$("f-genres").innerHTML=GENRES.map(g=>`<button type="button" class="tag${hl(g)}" data-fg="${esc(g)}" aria-pressed="${fGenres.has(g)}">${esc(g)}</button>`).join("")}
 $("f-genres").addEventListener("click",e=>{const b=e.target.closest("[data-fg]");if(!b)return;const g=b.dataset.fg;fGenres.has(g)?fGenres.delete(g):fGenres.add(g);b.setAttribute("aria-pressed",fGenres.has(g))});
 function setFlyerPreview(url){const img=$("f-flyer-img");if(url){img.src=url;img.hidden=false;$("f-flyer-ph").hidden=true;$("f-flyer-clear").hidden=false}else{img.removeAttribute("src");img.hidden=true;$("f-flyer-ph").hidden=false;$("f-flyer-clear").hidden=true}}
 $("f-flyer").addEventListener("change",e=>{
@@ -306,13 +311,13 @@ function openForm(id,fromPending){
   $("formTitle").textContent=!admin?"SUBMIT EVENT":fromPending?"REVIEW EVENT":id?"EDIT EVENT":"ADD EVENT";
   $("formLead").textContent=admin?(fromPending?"내용을 다듬은 뒤 승인하면 바로 게시돼요.":"운영진이 등록한 일정은 바로 게시돼요."):"제보한 일정은 운영진이 확인한 뒤 게시돼요.";
   $("f-title").value=e?.title||"";$("f-start").value=e?.start||(S.pick&&S.pick!==ym(today())?S.pick+"-01":today());$("f-end").value=e?.end||"";$("f-time").value=e?.time||"";
-  $("f-venue").value=e?.venue||"";$("f-url").value=e?.url||"";$("f-memo").value=e?.memo||"";
+  $("f-venue").value=e?.venue||"";$("f-url").value=e?.url||"";$("f-kakao").value=e?.kakao||"";$("f-memo").value=e?.memo||"";
   $("f-insta").value="";$("f-note").value="";$("f-credit").checked=true;$("f-hp").value="";
   $("submitter").hidden=admin;
   fGenres=new Set(e?.genres||[]);renderFormGenres();
   $("f-flyer").value="";S.flyer={path:e?.flyerPath||null,file:null,url:e?.flyer||null};setFlyerPreview(S.flyer.url);
   $("f-flyer-msg").textContent="세로형 포스터(A4 비율) 이미지를 추천해요. 없으면 제목으로 포스터를 만들어 보여줘요.";
-  ["title","start","end","insta"].forEach(k=>{$(`f-${k}-err`).hidden=true;$(`f-${k}-wrap`).classList.remove("bad")});
+  ["title","start","end","insta","kakao"].forEach(k=>{$(`f-${k}-err`).hidden=true;$(`f-${k}-wrap`).classList.remove("bad")});
   $("saveBtn").textContent=!admin?"제보하기":fromPending?"승인하고 게시":"저장";
   openSheet("formScrim");setTimeout(()=>$("f-title").focus(),30);
 }
@@ -326,7 +331,8 @@ $("form").addEventListener("submit",async ev=>{
   const admin=S.isAdmin;
   const title=$("f-title").value.trim(),start=$("f-start").value,end=$("f-end").value;
   const insta=$("f-insta").value.trim().replace(/^@+/,"").toLowerCase();
-  const errs={title:!title,start:!start||(!admin&&start<addDays(today(),-1)),end:!!(end&&start&&end<start),insta:!admin&&!/^[a-z0-9._]{1,30}$/.test(insta)};
+  const kakao=$("f-kakao").value.trim();
+  const errs={title:!title,start:!start||(!admin&&start<addDays(today(),-1)),end:!!(end&&start&&end<start),kakao:!!kakao&&!KAKAO_RE.test(kakao),insta:!admin&&!/^[a-z0-9._]{1,30}$/.test(insta)};
   for(const k in errs){$(`f-${k}-err`).hidden=!errs[k];$(`f-${k}-wrap`).classList.toggle("bad",errs[k])}
   if(Object.values(errs).some(Boolean)){const first=Object.keys(errs).find(k=>errs[k]);$(`f-${first}`)?.focus();return}
   if($("f-hp").value){closeForm();openSheet("doneScrim");return}  // bot trap
@@ -341,13 +347,13 @@ $("form").addEventListener("submit",async ev=>{
     if(!admin){
       const {error}=await sb.rpc("submit_event",{p_title:title,p_start:start,p_end:end&&end>start?end:null,p_time:$("f-time").value||"",
         p_venue:$("f-venue").value.trim(),p_genres:genres,p_url:$("f-url").value.trim()||null,p_memo:$("f-memo").value.trim(),
-        p_flyer:flyerPath,p_instagram:insta,p_note:$("f-note").value.trim(),p_credit:$("f-credit").checked});
+        p_flyer:flyerPath,p_instagram:insta,p_note:$("f-note").value.trim(),p_credit:$("f-credit").checked,p_kakao:kakao||null});
       if(error)throw error;
       closeForm();openSheet("doneScrim");return;
     }
     const url=$("f-url").value.trim();
     const row={title,start_date:start,end_date:end&&end>start?end:null,start_time:$("f-time").value||null,venue:$("f-venue").value.trim()||null,
-      genres,url:/^https?:\/\//i.test(url)?url:null,memo:$("f-memo").value.trim()||null,flyer_path:flyerPath};
+      genres,url:/^https?:\/\//i.test(url)?url:null,kakao_url:kakao||null,memo:$("f-memo").value.trim()||null,flyer_path:flyerPath};
     let id=S.editing;
     if(id){
       if(S.editingPending)Object.assign(row,{status:"approved",posted_by_name:S.adminName,reviewed_at:new Date().toISOString(),reviewed_by:S.user.id});
@@ -364,6 +370,7 @@ $("form").addEventListener("submit",async ev=>{
     toast(/too_many_submissions/.test(m)?"제보가 많아요. 1시간 뒤에 다시 제보해 주세요"
       :/queue_full/.test(m)?"지금은 제보가 밀려 있어요. 잠시 후 다시 시도해 주세요"
       :/invalid_instagram/.test(m)?"인스타그램 아이디를 확인해 주세요"
+      :/invalid_kakao/.test(m)?"카카오톡 오픈채팅 링크를 확인해 주세요"
       :/past_date/.test(m)?"이미 지난 날짜는 제보할 수 없어요"
       :/row-level security|permission/i.test(m)?"운영진만 할 수 있는 작업이에요"
       :"보내지 못했어요. 잠시 후 다시 시도해 주세요");
