@@ -349,6 +349,23 @@ body{margin:0;min-height:100vh}
 @media (max-width:480px){
   #reviewBtn{height:34px;padding:0 10px}
 }
+
+/* ---------- poster ratio (A-series 1:1.414) ---------- */
+:root{--poster:1/1.414}
+.flyer,.detail .flyer,.pend .flyer{aspect-ratio:var(--poster)}
+.gen{padding:14px 14px 16px}
+.gen b{-webkit-line-clamp:5;font-size:clamp(15px,1.5vw,20px)}
+.detail{grid-template-columns:minmax(0,5fr) minmax(0,6fr)}
+.detail .flyer{align-self:start}
+.detail .gen b{-webkit-line-clamp:7}
+.drop img,.drop .ph{width:64px;height:auto;aspect-ratio:var(--poster)}
+@media (max-width:760px){
+  .detail{grid-template-columns:1fr}
+  .detail .flyer{width:min(100%,360px);margin:20px auto 0;border:1px solid var(--line);border-radius:8px}
+}
+@media (max-width:600px){.pend .flyer{aspect-ratio:var(--poster);width:min(100%,220px)}}
+@media (max-width:480px){.gen{padding:10px 10px 12px}.gen b{font-size:13px;-webkit-line-clamp:5}}
+@media (max-width:360px){.flyer{aspect-ratio:var(--poster)}.gen b{font-size:16px}}
 </style>
 
 </head>
@@ -444,7 +461,7 @@ body{margin:0;min-height:100vh}
     <div class="field"><span class="lab">장르 (여러 개 선택)</span><div class="tags" id="f-genres"></div></div>
     <div class="field"><span class="lab">플라이어</span>
       <div class="drop"><img id="f-flyer-img" alt="" hidden><div class="ph" id="f-flyer-ph"></div>
-        <div class="txt"><span id="f-flyer-msg">정사각형 이미지를 추천해요. 없으면 제목으로 포스터를 만들어 보여줘요.</span>
+        <div class="txt"><span id="f-flyer-msg">세로형 포스터(A4 비율) 이미지를 추천해요. 없으면 제목으로 포스터를 만들어 보여줘요.</span>
           <div class="acts"><label class="pill kr" for="f-flyer">이미지 선택</label><button type="button" class="pill kr" id="f-flyer-clear" hidden>지우기</button></div>
           <input id="f-flyer" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden></div></div>
     </div>
@@ -484,6 +501,6 @@ body{margin:0;min-height:100vh}
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
-<script src="app.js"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

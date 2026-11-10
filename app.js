@@ -307,7 +307,7 @@ function openForm(id,fromPending){
   $("submitter").hidden=admin;
   fGenres=new Set(e?.genres||[]);renderFormGenres();
   $("f-flyer").value="";S.flyer={path:e?.flyerPath||null,file:null,url:e?.flyer||null};setFlyerPreview(S.flyer.url);
-  $("f-flyer-msg").textContent="정사각형 이미지를 추천해요. 없으면 제목으로 포스터를 만들어 보여줘요.";
+  $("f-flyer-msg").textContent="세로형 포스터(A4 비율) 이미지를 추천해요. 없으면 제목으로 포스터를 만들어 보여줘요.";
   ["title","start","end","insta"].forEach(k=>{$(`f-${k}-err`).hidden=true;$(`f-${k}-wrap`).classList.remove("bad")});
   $("saveBtn").textContent=!admin?"제보하기":fromPending?"승인하고 게시":"저장";
   openSheet("formScrim");setTimeout(()=>$("f-title").focus(),30);
