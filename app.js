@@ -70,7 +70,7 @@ function renderFilters(){
   $("genreTags").innerHTML=`<button class="tag" data-genre="" aria-pressed="${!S.genre}">ALL</button>`+
     GENRES.filter(g=>gc[g]||g===S.genre).map(g=>`<button class="tag" data-genre="${esc(g)}" aria-pressed="${S.genre===g}">${esc(g)} <span class="n">${gc[g]||0}</span></button>`).join("");
 }
-function genInner(e){return `<span>${md(e.start)} ${wd(e.start)}</span><b>${esc(e.title)}</b><span>${esc(e.venue)}</span>`}
+function genInner(e){return `<span>${md(e.start)} ${wd(e.start)}</span><b>${esc(e.title)}</b>`}
 /* default poster: config.js 의 defaultPoster 이미지가 있으면 플라이어 없는 일정에 사용 */
 const DEFAULT_POSTER=typeof CFG.defaultPoster==="string"&&/^[\w./-]+$/.test(CFG.defaultPoster)?CFG.defaultPoster:"";
 const DEFAULT_TEXT=CFG.defaultPosterText!==false;
