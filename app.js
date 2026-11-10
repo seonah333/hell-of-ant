@@ -71,9 +71,13 @@ function renderFilters(){
     GENRES.filter(g=>gc[g]||g===S.genre).map(g=>`<button class="tag" data-genre="${esc(g)}" aria-pressed="${S.genre===g}">${esc(g)} <span class="n">${gc[g]||0}</span></button>`).join("");
 }
 function genInner(e){return `<span>${md(e.start)} ${wd(e.start)}</span><b>${esc(e.title)}</b><span>${esc(e.venue)}</span>`}
+/* default poster: config.js 의 defaultPoster 이미지가 있으면 플라이어 없는 일정에 사용 */
+const DEFAULT_POSTER=typeof CFG.defaultPoster==="string"&&/^[\w./-]+$/.test(CFG.defaultPoster)?CFG.defaultPoster:"";
+const DEFAULT_TEXT=CFG.defaultPosterText!==false;
 function flyerHTML(e){
-  return e.flyer?`<img src="${esc(e.flyer)}" alt="${esc(e.title)} 플라이어" loading="lazy" data-h="${hue(e.title)}" data-gen="${esc(genInner(e))}">`
-    :`<div class="gen" style="--h:${hue(e.title)}">${genInner(e)}</div>`;
+  if(e.flyer)return `<img src="${esc(e.flyer)}" alt="${esc(e.title)} 플라이어" loading="lazy" data-h="${hue(e.title)}" data-gen="${esc(genInner(e))}">`;
+  if(DEFAULT_POSTER)return `<div class="gen custom${DEFAULT_TEXT?"":" bare"}" style="--h:${hue(e.title)};--poster-img:url('${DEFAULT_POSTER}')" role="img" aria-label="${esc(e.title)}">${DEFAULT_TEXT?genInner(e):""}</div>`;
+  return `<div class="gen" style="--h:${hue(e.title)}">${genInner(e)}</div>`;
 }
 document.addEventListener("error",ev=>{const img=ev.target;if(!(img instanceof HTMLImageElement)||!img.dataset.gen)return;
   const d=document.createElement("div");d.className="gen";d.style.setProperty("--h",img.dataset.h||"0");d.innerHTML=img.dataset.gen;img.replaceWith(d)},true);

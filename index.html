@@ -366,6 +366,11 @@ body{margin:0;min-height:100vh}
 @media (max-width:600px){.pend .flyer{aspect-ratio:var(--poster);width:min(100%,220px)}}
 @media (max-width:480px){.gen{padding:10px 10px 12px}.gen b{font-size:13px;-webkit-line-clamp:5}}
 @media (max-width:360px){.flyer{aspect-ratio:var(--poster)}.gen b{font-size:16px}}
+
+/* ---------- custom default poster ---------- */
+.gen.custom{background:linear-gradient(180deg,rgba(0,0,0,.45) 0%,rgba(0,0,0,0) 28%,rgba(0,0,0,0) 55%,rgba(0,0,0,.7) 100%),var(--poster-img) center/cover no-repeat,#0d0d0f}
+.gen.custom.bare{background:var(--poster-img) center/cover no-repeat,#0d0d0f}
+.gen.custom b,.gen.custom span{text-shadow:0 1px 10px rgba(0,0,0,.6)}
 </style>
 
 </head>
@@ -501,6 +506,6 @@ body{margin:0;min-height:100vh}
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
