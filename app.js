@@ -236,7 +236,7 @@ $("reviewBtn").onclick=()=>{S.rejecting=null;renderReview();openSheet("reviewScr
 $("adminLink").onclick=async()=>{
   if(!sb){toast("아직 서비스 설정이 끝나지 않았어요");return}
   if(S.user){await sb.auth.signOut();toast("로그아웃했어요");return}
-  $("l-msg").textContent="운영진으로 등록된 이메일로 로그인 링크를 보내드려요.";$("l-email").value="";openSheet("loginScrim");setTimeout(()=>$("l-email").focus(),30);
+  $("l-msg").textContent="운영진 계정의 이메일과 비밀번호를 입력해 주세요.";$("l-msg").classList.remove("bad");$("l-email").value="";$("l-pw").value="";openSheet("loginScrim");setTimeout(()=>$("l-email").focus(),30);
 };
 
 $("detailScrim").addEventListener("click",async e=>{
@@ -262,12 +262,22 @@ document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;
   if(!$("detailScrim").hidden)closeDetail()});
 
 $("loginForm").addEventListener("submit",async e=>{
-  e.preventDefault();const email=$("l-email").value.trim();
-  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){$("l-msg").textContent="이메일 주소를 확인해 주세요.";return}
-  const b=$("l-send");b.disabled=true;b.textContent="보내는 중…";
-  const {error}=await sb.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:location.origin+location.pathname}});
-  b.disabled=false;b.textContent="로그인 링크 받기";
-  $("l-msg").textContent=error?(/signup|not allowed|not found/i.test(error.message)?"운영진으로 등록된 이메일이 아니에요.":"링크를 보내지 못했어요. 잠시 후 다시 시도해 주세요."):`${email} 로 로그인 링크를 보냈어요. 메일함에서 링크를 눌러 주세요.`;
+  e.preventDefault();
+  const email=$("l-email").value.trim(),password=$("l-pw").value;
+  const msg=t=>{$("l-msg").textContent=t;$("l-msg").classList.add("bad")};
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){msg("이메일 주소를 확인해 주세요.");$("l-email").focus();return}
+  if(!password){msg("비밀번호를 입력해 주세요.");$("l-pw").focus();return}
+  const b=$("l-send");b.disabled=true;b.textContent="로그인 중…";
+  const {error}=await sb.auth.signInWithPassword({email,password});
+  b.disabled=false;b.textContent="로그인";
+  if(error){
+    msg(/invalid login credentials/i.test(error.message)?"이메일 또는 비밀번호가 맞지 않아요."
+      :/email not confirmed/i.test(error.message)?"아직 확인되지 않은 계정이에요. 대표 운영진에게 계정 확인을 요청해 주세요."
+      :/rate|too many/i.test(error.message)?"로그인 시도가 많아요. 잠시 후 다시 시도해 주세요."
+      :"로그인하지 못했어요. 잠시 후 다시 시도해 주세요.");
+    $("l-pw").value="";$("l-pw").focus();return;
+  }
+  $("l-pw").value="";closeSheet("loginScrim");toast("운영진으로 로그인했어요");
 });
 
 /* ---------- form ---------- */

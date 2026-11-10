@@ -3,7 +3,7 @@
 누구나 행사를 제보하고, 운영진이 승인하면 게시되는 커뮤니티 행사 캘린더예요.
 
 - 방문자: 로그인 없이 일정 보기, 행사 제보하기
-- 운영진: 이메일 로그인 → 제보 승인·수정·반려, 일정 직접 등록·수정·삭제
+- 운영진: 이메일 + 비밀번호 로그인 → 제보 승인·수정·반려, 일정 직접 등록·수정·삭제
 
 ## 파일 구성
 
@@ -38,17 +38,36 @@
 2. `supabase/schema.sql` 파일 내용을 전부 붙여넣고 **Run**
 3. 아래쪽에 `Success. No rows returned` 가 보이면 완료예요.
 
-### 4. 운영진 로그인 설정
+### 4. 운영진 계정 만들기
 
 1. **Authentication → Sign In / Providers**: Email 이 켜져 있는지 확인하고, **Allow new users to sign up** 은 **끄기**  
    (운영진이 아닌 사람이 계정을 만들지 못하게 해요)
-2. **Authentication → Users → Add user → Send invitation**: 운영진 이메일을 초대해요. (서나님 포함)
+2. **Authentication → Users → Add user → Create new user**
+   - Email: 운영진 이메일
+   - Password: 운영진이 쓸 비밀번호 (다른 사이트에서 쓰지 않는 비밀번호)
+   - **Auto Confirm User** 체크 → Create user  
+   (초대 메일 방식은 무료 플랜의 메일 발송 제한에 쉽게 걸려서 이 방법을 추천해요)
 3. **SQL Editor** 에서 운영진마다 아래를 실행해요. 이름은 일정에 '등록: 이름'으로 표시돼요.
 
 ```sql
 insert into public.admins (user_id, display_name)
 select id, '서나' from auth.users where email = '운영진이메일@example.com';
 ```
+
+4. 확인: `select * from public.admins;` 를 실행해서 이름이 보이면 완료예요.
+
+#### 이미 만든 계정에 비밀번호를 정하거나 바꿀 때
+
+초대 메일로 만든 계정처럼 비밀번호가 없는 계정, 또는 비밀번호를 잊은 운영진은 SQL Editor 에서 아래를 실행하세요.
+
+```sql
+update auth.users
+set encrypted_password = extensions.crypt('새비밀번호', extensions.gen_salt('bf')),
+    email_confirmed_at = coalesce(email_confirmed_at, now())
+where email = '운영진이메일@example.com';
+```
+
+> 실행한 SQL 은 Supabase 에 기록이 남을 수 있어요. 비밀번호를 정한 뒤에는 그 쿼리 탭을 닫거나 지워 주세요.
 
 ### 5. config.js 채우기
 
@@ -79,13 +98,13 @@ Supabase **Authentication → URL Configuration**
 - **Site URL**: 7단계에서 받은 주소
 - **Redirect URLs**: 같은 주소를 추가
 
-이걸 안 하면 운영진 로그인 메일의 링크가 다른 곳으로 이동해요.
+비밀번호 로그인에는 직접 쓰이지 않지만, 나중에 Supabase 가 보내는 메일(비밀번호 재설정 등)의 링크가 이 주소로 연결돼요.
 
 ### 9. 오픈 전 테스트
 
 - [ ] 시크릿 창에서 사이트 열기 → 일정 목록이 보여요 (처음엔 비어 있어요)
 - [ ] 시크릿 창에서 **+ ADD EVENT** → 제보하기 → 'THANK YOU' 화면
-- [ ] 일반 창에서 페이지 맨 아래 **운영진 로그인** → 메일의 링크 클릭 → 상단에 **승인 대기 1**
+- [ ] 일반 창에서 페이지 맨 아래 **운영진 로그인** → 이메일·비밀번호 입력 → 상단에 **승인 대기 1**
 - [ ] **승인** → 시크릿 창에서 새로고침하면 일정이 보여요
 - [ ] 휴대폰으로 열어서 화면 확인
 
