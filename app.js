@@ -151,12 +151,67 @@ function renderDetail(){
     ${e.url&&/^https?:\/\//i.test(e.url)?`<a class="link" href="${esc(e.url)}" target="_blank" rel="noopener">예매·정보 링크 열기 ↗</a>`:""}
     ${e.kakao&&KAKAO_RE.test(e.kakao)?`<a class="kakao" href="${esc(e.kakao)}" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4C7 4 3 7.1 3 11c0 2.5 1.7 4.7 4.2 5.9L6.5 20l3.6-2.3c.6.1 1.2.1 1.9.1 5 0 9-3.1 9-7s-4-6.8-9-6.8z" fill="currentColor"/></svg><span><b>카카오톡 오픈채팅방</b><small>이 행사 같이 갈 사람 모이는 방</small></span><i aria-hidden="true">↗</i></a>`:""}
     <div class="who reg">등록: ${esc(e.postedBy||"운영진")}${credit}</div>
-    ${S.isAdmin?(S.confirm?`<div class="confirm">“${esc(e.title)}” 일정을 삭제할까요? 되돌릴 수 없어요.<div class="acts"><button class="pill danger kr" id="delYes">삭제</button><button class="pill kr" id="delNo">취소</button></div></div>`:
-      `<div class="acts"><button class="pill kr" id="editBtn">수정</button><button class="pill kr" id="delBtn">삭제</button></div>`):""}
+    ${S.isAdmin&&S.confirm?`<div class="confirm">“${esc(e.title)}” 일정을 삭제할까요? 되돌릴 수 없어요.<div class="acts"><button class="pill danger kr" id="delYes">삭제</button><button class="pill kr" id="delNo">취소</button></div></div>`:
+      `<div class="acts">${e.status!=="pending"?`<button class="pill solid kr share-btn" id="shareBtn"><svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V2M5 5l3-3 3 3M3 8v5a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg> 공유하기</button>`:""}${S.isAdmin?`<button class="pill kr" id="editBtn">수정</button><button class="pill kr" id="delBtn">삭제</button>`:""}</div>`}
   </div></div>`;
 }
-function openDetail(id){S.open=id;S.confirm=false;$("detailScrim").hidden=false;renderDetail()}
-function closeDetail(){S.open=null;S.confirm=false;$("detailScrim").hidden=true}
+/* ---------- deep link & share ---------- */
+const eventUrl=id=>`${location.origin}${location.pathname}?e=${encodeURIComponent(id)}`;
+function setUrl(id){try{history.replaceState(null,"",id?eventUrl(id):location.pathname)}catch(_){}}
+function openDetail(id){S.open=id;S.confirm=false;$("detailScrim").hidden=false;renderDetail();if(S.events.has(id))setUrl(id)}
+function closeDetail(){S.open=null;S.confirm=false;$("detailScrim").hidden=true;setUrl(null)}
+let deepLinked=false;
+function openDeepLink(){
+  if(deepLinked)return;deepLinked=true;
+  const id=new URLSearchParams(location.search).get("e");if(!id)return;
+  if(S.events.has(id))openDetail(id);else{toast("찾을 수 없거나 삭제된 일정이에요");setUrl(null)}
+}
+
+const KAKAO_KEY=typeof CFG.kakaoJsKey==="string"&&/^[0-9a-f]{20,40}$/i.test(CFG.kakaoJsKey.trim())?CFG.kakaoJsKey.trim():"";
+let kakaoReady=null;
+function loadKakao(){
+  if(!KAKAO_KEY)return Promise.reject(new Error("no_key"));
+  if(kakaoReady)return kakaoReady;
+  kakaoReady=new Promise((res,rej)=>{
+    if(window.Kakao){try{if(!Kakao.isInitialized())Kakao.init(KAKAO_KEY);res(Kakao)}catch(err){rej(err)}return}
+    const sc=document.createElement("script");sc.src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js";sc.crossOrigin="anonymous";sc.async=true;
+    sc.onload=()=>{try{if(!Kakao.isInitialized())Kakao.init(KAKAO_KEY);res(Kakao)}catch(err){rej(err)}};
+    sc.onerror=()=>{kakaoReady=null;rej(new Error("sdk_load"))};
+    document.head.appendChild(sc);
+  });
+  return kakaoReady;
+}
+function absUrl(u){try{return new URL(u,location.href).href}catch(_){return ""}}
+function shareImage(e){return e.flyer?e.flyer:(DEFAULT_POSTER?absUrl(DEFAULT_POSTER):"")}
+function shareText(e){return `${md(e.start)} ${wd(e.start)}${e.time?" "+e.time:""}${e.venue?" · "+e.venue:""}`}
+let shareEvent=null;
+function openShare(e){
+  shareEvent=e;
+  $("shareTitle").textContent=e.title;$("shareMeta").textContent=shareText(e);
+  $("shareUrl").value=eventUrl(e.id);$("copyBtn").textContent="복사";
+  $("kakaoShareBtn").hidden=!KAKAO_KEY;
+  $("nativeShareBtn").hidden=!navigator.share;
+  $("shareHint").hidden=!!KAKAO_KEY;
+  openSheet("shareScrim");if(KAKAO_KEY)loadKakao().catch(()=>{});
+}
+async function copyShareUrl(){
+  const v=$("shareUrl").value;
+  try{await navigator.clipboard.writeText(v);$("copyBtn").textContent="복사됨 ✓";toast("링크를 복사했어요")}
+  catch(_){const i=$("shareUrl");i.focus();i.select();try{document.execCommand("copy");$("copyBtn").textContent="복사됨 ✓";toast("링크를 복사했어요")}catch(__){toast("링크를 길게 눌러 복사해 주세요")}}
+}
+async function kakaoShare(){
+  const e=shareEvent;if(!e)return;
+  try{
+    const K=await loadKakao();const url=eventUrl(e.id),img=shareImage(e);
+    const link={mobileWebUrl:url,webUrl:url};
+    if(img)K.Share.sendDefault({objectType:"feed",content:{title:e.title,description:shareText(e),imageUrl:img,link},buttons:[{title:"일정 보기",link}]});
+    else K.Share.sendDefault({objectType:"text",text:`${e.title}\n${shareText(e)}`,link,buttonTitle:"일정 보기"});
+  }catch(err){toast("카카오톡 공유를 열지 못했어요. 링크를 복사해서 보내주세요")}
+}
+async function nativeShare(){
+  const e=shareEvent;if(!e||!navigator.share)return;
+  try{await navigator.share({title:e.title,text:`${e.title} · ${shareText(e)}`,url:eventUrl(e.id)})}catch(_){}
+}
 
 function renderReview(){
   const box=$("reviewList");
@@ -191,7 +246,7 @@ async function loadEvents(){
   if(!sb)return;
   const {data,error}=await sb.from("events").select("*").eq("status","approved").order("start_date",{ascending:true}).limit(1000);
   if(error){setStatus("일정을 불러오지 못했어요. 잠시 후 새로고침해 주세요.");S.loaded=true;render();return}
-  S.events=new Map(data.map(r=>[r.id,fromRow(r)]));S.loaded=true;setStatus("");render();
+  S.events=new Map(data.map(r=>[r.id,fromRow(r)]));S.loaded=true;setStatus("");render();openDeepLink();
 }
 async function loadPending(){
   if(!sb||!S.isAdmin){S.pending=[];renderAdmin();return}
@@ -240,6 +295,10 @@ $("genreTags").addEventListener("click",e=>{const b=e.target.closest("[data-genr
 let qT;$("q").addEventListener("input",e=>{clearTimeout(qT);qT=setTimeout(()=>{S.q=e.target.value.trim();S.shown=PAGE;render()},120)});
 $("moreBtn").onclick=()=>{S.shown+=PAGE;renderGrid()};
 $("addBtn").onclick=()=>openForm(null);
+$("copyBtn").onclick=copyShareUrl;
+$("shareUrl").addEventListener("focus",e=>e.target.select());
+$("kakaoShareBtn").onclick=kakaoShare;
+$("nativeShareBtn").onclick=nativeShare;
 $("toTop").onclick=()=>window.scrollTo({top:0,behavior:reduced()?"auto":"smooth"});
 $("reviewBtn").onclick=()=>{S.rejecting=null;renderReview();openSheet("reviewScrim");loadPending()};
 $("adminLink").onclick=async()=>{
@@ -255,6 +314,7 @@ $("detailScrim").addEventListener("click",async e=>{
   else if(t.id==="delNo"){S.confirm=false;renderDetail()}
   else if(t.id==="delYes"){await removeEvent(S.open)}
   else if(t.id==="editBtn"){const id=S.open;closeDetail();openForm(id)}
+  else if(t.id==="shareBtn"){const ev=S.events.get(S.open);if(ev)openShare(ev)}
 });
 $("reviewScrim").addEventListener("click",async e=>{
   if(e.target===$("reviewScrim")||e.target.closest("#closeReview")){closeSheet("reviewScrim");return}
@@ -265,9 +325,9 @@ $("reviewScrim").addEventListener("click",async e=>{
   else if(d.rejNo){S.rejecting=null;renderReview()}
   else if(d.rejYes){t.disabled=true;await removeEvent(d.rejYes,true)}
 });
-["loginScrim","doneScrim"].forEach(id=>$(id).addEventListener("click",e=>{if(e.target===$(id)||e.target.closest("[data-close]"))closeSheet(id)}));
+["loginScrim","doneScrim","shareScrim"].forEach(id=>$(id).addEventListener("click",e=>{if(e.target===$(id)||e.target.closest("[data-close]"))closeSheet(id)}));
 document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;
-  for(const id of ["formScrim","loginScrim","doneScrim","reviewScrim"])if(!$(id).hidden){id==="formScrim"?closeForm():closeSheet(id);return}
+  for(const id of ["shareScrim","formScrim","loginScrim","doneScrim","reviewScrim"])if(!$(id).hidden){id==="formScrim"?closeForm():closeSheet(id);return}
   if(!$("detailScrim").hidden)closeDetail()});
 
 $("loginForm").addEventListener("submit",async e=>{
