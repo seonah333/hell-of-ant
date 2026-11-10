@@ -10,5 +10,6 @@
 window.HOA_CONFIG = {
   supabaseUrl: "https://jvgzocehsohxaypzswsf.supabase.co",
   supabaseAnonKey: "sb_publishable_wa00URbqUO-BmxmIY-K5yA_173R8QqP",
-  instagram: "hoa__official"
+  instagram: "hoa__official",
+  defaultPoster: "default-poster.jpg"
 };
