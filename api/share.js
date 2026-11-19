@@ -38,7 +38,7 @@ module.exports = async function handler(req, res) {
   const id = String((req.query && req.query.id) || "");
   const valid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   const target = valid ? `/?e=${id}` : "/";
-  const fallback = { title: SITE, desc: "개미지옥과 함께 가고 싶은 공연, 파티, 페스티벌을 모아두는 곳", image: "", url: `${origin}/`, target };
+  const fallback = { title: SITE, desc: "개미지옥과 함께 가고 싶은 공연, 파티, 페스티벌을 모아두는 곳", image: `${origin}/og-image.png`, url: `${origin}/`, target };
 
   const SB = (process.env.SUPABASE_URL || "").replace(/\/+$/, "");
   const KEY = process.env.SUPABASE_ANON_KEY || "";
