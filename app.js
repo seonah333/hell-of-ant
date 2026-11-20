@@ -27,7 +27,9 @@ const reduced=()=>matchMedia("(prefers-reduced-motion:reduce)").matches;
 const uuid=()=>(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2));
 
 /* ---------- state ---------- */
-const S={events:new Map(),pending:[],q:"",date:"upcoming",pick:"",genre:"",shown:PAGE,open:null,confirm:false,
+const VIEW_KEY="hoa_view";
+const readView=()=>{try{return localStorage.getItem(VIEW_KEY)==="cal"?"cal":"list"}catch(_){return "list"}};
+const S={events:new Map(),pending:[],q:"",date:"upcoming",pick:"",genre:"",shown:PAGE,open:null,confirm:false,view:readView(),calMonth:"",sel:"",
   editing:null,editingPending:false,rejecting:null,loaded:false,user:null,isAdmin:false,adminName:"",flyer:{path:null,file:null,url:null}};
 
 const CFG=window.HOA_CONFIG||{};
@@ -86,14 +88,43 @@ function flyerHTML(e){
 document.addEventListener("error",ev=>{const img=ev.target;if(!(img instanceof HTMLImageElement)||!img.dataset.gen)return;
   const d=document.createElement("div");d.className="gen";d.style.setProperty("--h",img.dataset.h||"0");d.innerHTML=img.dataset.gen;img.replaceWith(d)},true);
 
-function renderNext(){
-  const t=today();let best=null;
-  for(const [,e] of S.events){if(endOf(e)<t)continue;if(!best||e.start<best.start||(e.start===best.start&&(e.time||"99")<(best.time||"99")))best=e}
-  if(!best){$("nextBox").innerHTML=`<div class="next empty"><div><div class="k">NEXT UP</div><div class="t">${S.loaded||!sb?"아직 예정된 일정이 없어요":"일정을 불러오는 중이에요…"}</div></div></div>`;return}
-  $("nextBox").innerHTML=`<button class="next" data-open="${esc(best.id)}"><div class="dd">${best.start<=t?"NOW":dday(best.start)}</div>
-    <div style="min-width:0"><div class="k">NEXT UP · ${md(best.start)} ${wd(best.start)}${best.time?" · "+esc(best.time):""}</div><div class="t">${esc(best.title)}</div>${best.venue?`<div class="m">${esc(best.venue)}</div>`:""}</div>
-    <span class="go">자세히 보기 →</span></button>`;
+/* NEXT UP 배너: 오늘 행사가 여러 개면 자동으로 넘겨 보여줘요 */
+const ROTATE_MS=4000;
+let nextTimer=null,nextIdx=0,nextKey="",nextPaused=false;
+function nextInner(e,label){
+  return `<div class="dd">${label}</div>
+    <div class="rot" style="min-width:0"><div class="k">${label==="TODAY"?(e.end&&e.end>e.start?`${md(e.start)} – ${md(e.end)}`:`${md(e.start)} ${wd(e.start)}`):`NEXT UP · ${md(e.start)} ${wd(e.start)}`}${e.time?" · "+esc(e.time):""}</div><div class="t">${esc(e.title)}</div>${e.venue?`<div class="m">${esc(e.venue)}</div>`:""}</div>
+    <span class="go">자세히 보기 →</span>`;
 }
+function renderNext(){
+  const t=today(),todays=[];let best=null;
+  for(const [,e] of S.events){
+    if(endOf(e)<t)continue;
+    if(e.start<=t)todays.push(e);
+    else if(!best||e.start<best.start||(e.start===best.start&&(e.time||"99")<(best.time||"99")))best=e;
+  }
+  clearInterval(nextTimer);nextTimer=null;
+  if(!todays.length&&!best){nextKey="";$("nextBox").innerHTML=`<div class="next empty"><div><div class="k">NEXT UP</div><div class="t">${S.loaded||!sb?"아직 예정된 일정이 없어요":"일정을 불러오는 중이에요…"}</div></div></div>`;return}
+  if(!todays.length){nextKey="";$("nextBox").innerHTML=`<button class="next" data-open="${esc(best.id)}">${nextInner(best,dday(best.start))}</button>`;return}
+  todays.sort((a,b)=>((a.start<t)-(b.start<t))||(a.time||"99").localeCompare(b.time||"99"));
+  const key=todays.map(e=>e.id).join(",");if(key!==nextKey){nextKey=key;nextIdx=0}
+  nextIdx%=todays.length;
+  const n=todays.length,e=todays[nextIdx];
+  $("nextBox").innerHTML=`<div class="nextwrap${n>1?" multi":""}"><button class="next" data-open="${esc(e.id)}" aria-label="오늘 일정 ${n}개 중 ${nextIdx+1}번째: ${esc(e.title)}">${nextInner(e,"TODAY")}</button>`+
+    (n>1?`<div class="npager" role="group" aria-label="오늘 일정 넘기기"><span class="nnum">${nextIdx+1}/${n}</span>${todays.map((x,i)=>`<button type="button" class="ndot" data-next-i="${i}" aria-label="${i+1}번째 일정 보기" aria-current="${i===nextIdx}"></button>`).join("")}</div>`:"")+`</div>`;
+  if(n>1&&!reduced())nextTimer=setInterval(()=>{if(nextPaused||document.hidden)return;showNext(nextIdx+1)},ROTATE_MS);
+}
+function showNext(i){
+  const box=$("nextBox"),btn=box.querySelector(".next");if(!btn)return;
+  btn.classList.add("swap");
+  setTimeout(()=>{const keep=nextTimer;nextTimer=null;clearInterval(keep);nextIdx=i;renderNext()},reduced()?0:220);
+}
+$("nextBox").addEventListener("click",e=>{const d=e.target.closest("[data-next-i]");if(d){e.stopPropagation();showNext(Number(d.dataset.nextI))}});
+let nHover=false,nFocus=false;const syncPause=()=>{nextPaused=nHover||nFocus};
+$("nextBox").addEventListener("pointerenter",e=>{if(e.pointerType==="mouse"){nHover=true;syncPause()}});
+$("nextBox").addEventListener("pointerleave",()=>{nHover=false;syncPause()});
+$("nextBox").addEventListener("focusin",e=>{nFocus=e.target.matches(":focus-visible");syncPause()});
+$("nextBox").addEventListener("focusout",()=>{nFocus=false;syncPause()});
 function renderGrid(){
   const items=list(),t=today();
   $("count").textContent=`${items.length}개 일정`;
@@ -130,7 +161,85 @@ function renderAdmin(){
   $("reviewBtn").classList.toggle("has",S.pending.length>0);
   $("adminLink").textContent=S.user?(S.isAdmin?`운영진 ${S.adminName} · 로그아웃`:"로그아웃"):"운영진 로그인";
 }
-function render(){renderFilters();renderNext();renderGrid();renderStats();renderAdmin();if(S.open)renderDetail()}
+function renderView(){
+  const cal=S.view==="cal";
+  $("listView").hidden=cal;$("calView").hidden=!cal;$("dateGroup").hidden=cal;
+  document.querySelectorAll("#viewSeg [data-view]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.view===S.view)));
+}
+function render(){renderView();renderFilters();renderNext();if(S.view==="cal")renderCal();else renderGrid();renderStats();renderAdmin();if(S.open)renderDetail()}
+
+/* ---------- calendar ---------- */
+const KWD=["일","월","화","수","목","금","토"];
+const monthAdd=(m,n)=>{const [y,mo]=m.split("-").map(Number);const d=new Date(y,mo-1+n,1);return `${d.getFullYear()}-${pad(d.getMonth()+1)}`};
+function calEvents(){
+  const out=[];
+  for(const [,e] of S.events){if(!textHit(e))continue;if(S.genre&&!(e.genres||[]).includes(S.genre))continue;out.push(e)}
+  return out.sort((a,b)=>a.start.localeCompare(b.start)||(a.time||"99").localeCompare(b.time||"99"));
+}
+function onDay(evs,day){return evs.filter(e=>e.start<=day&&endOf(e)>=day)}
+function renderCal(){
+  const t=today();if(!S.calMonth)S.calMonth=ym(t);
+  const m=S.calMonth,evs=calEvents(),first=parse(m+"-01"),startDow=first.getDay();
+  const dim=new Date(first.getFullYear(),first.getMonth()+1,0).getDate();
+  const cells=Math.ceil((startDow+dim)/7)*7;
+  const inMonth=evs.filter(e=>e.start<=m+"-31"&&endOf(e)>=m+"-01");
+  if(!S.sel||ym(S.sel)!==m){const firstEv=inMonth.find(e=>e.start>=m+"-01");S.sel=ym(t)===m?t:(firstEv?firstEv.start:m+"-01")}
+  $("calTitle").textContent=m.replace("-",".");
+  $("calCount").innerHTML=`이번 달 <b>${inMonth.length}</b>개`;
+  $("calDow").innerHTML=WD.map((d,i)=>`<span class="${i===0||i===6?"we":""}" aria-hidden="true">${matchMedia("(max-width:900px)").matches?d[0]:d}</span>`).join("");
+  let html="";
+  for(let i=0;i<cells;i++){
+    const dn=i-startDow+1;
+    if(dn<1||dn>dim){const d=new Date(first.getFullYear(),first.getMonth(),dn);html+=`<div class="day out" aria-hidden="true"><div class="n"><i>${d.getDate()}</i></div></div>`;continue}
+    const day=`${m}-${pad(dn)}`,list=onDay(evs,day),n=list.length;
+    const cls=["day",day<t?"past":"",day===t?"today":"",day===S.sel?"sel":""].filter(Boolean).join(" ");
+    const label=`${Number(m.slice(5))}월 ${dn}일 ${KWD[parse(day).getDay()]}요일, 일정 ${n}개`;
+    html+=`<button type="button" class="${cls}" data-day="${day}" aria-pressed="${day===S.sel}" aria-label="${label}"><div class="n"><i>${dn}</i>${n>2?`<span class="k">${n}</span>`:""}</div>`+
+      list.slice(0,2).map(e=>`<span class="ev${(e.genres||[]).some(g=>HL_GENRES.has(g))?" hl":""}${e.start<day?" cont":""}">${esc(e.title)}</span>`).join("")+
+      (n>2?`<span class="evmore">+${n-2}개 더보기</span>`:"")+
+      `<span class="dots">${list.slice(0,3).map(()=>"<i></i>").join("")}${n>3?'<i class="p">+</i>':""}</span></button>`;
+  }
+  $("calDays").innerHTML=html;
+  renderDayPanel(evs,inMonth);
+}
+function renderDayPanel(evs,inMonth){
+  const day=S.sel,t=today(),list=onDay(evs,day).sort((a,b)=>((a.start<day)-(b.start<day))||(a.time||"99").localeCompare(b.time||"99"));
+  const head=`<div class="dph"><b>${md(day)} ${wd(day)}</b><span>${list.length?list.length+"개 일정":""}</span></div>`;
+  if(!list.length){
+    let body;
+    if(sb&&!S.loaded)body="일정을 불러오는 중이에요…";
+    else if(!inMonth.length){
+      const nextEv=evs.find(e=>ym(e.start)>S.calMonth),prevEv=[...evs].reverse().find(e=>ym(endOf(e))<S.calMonth);
+      const filtered=S.q||S.genre;
+      body=`${filtered?"조건에 맞는 일정이 이 달엔 없어요.":"이 달엔 아직 일정이 없어요."}`+
+        (nextEv?`<button type="button" class="pill" data-cal-go="${ym(nextEv.start)}">다음 일정 있는 달로 →</button>`:prevEv?`<button type="button" class="pill" data-cal-go="${ym(prevEv.start)}">← 이전 일정 있는 달로</button>`:"")+
+        (filtered?`<button type="button" class="pill kr" id="resetBtn">필터 초기화</button>`:"");
+    }else body="이 날은 일정이 없어요.";
+    $("dayPanel").innerHTML=head+`<div class="dempty">${body}</div>`;return;
+  }
+  $("dayPanel").innerHTML=head+list.map(e=>{
+    const range=e.end&&e.end>e.start?`${md(e.start)}–${md(e.end)}`:"";
+    const meta=[range,e.time,e.venue].filter(Boolean).map(esc).join(" · ");
+    return `<button type="button" class="dli${endOf(e)<t?" past":""}" data-open="${esc(e.id)}"><div class="th" aria-hidden="true">${flyerHTML(e)}</div><div style="min-width:0"><div class="t">${esc(e.title)}</div>${meta?`<div class="m">${meta}</div>`:""}${(e.genres||[]).length?gtags(e.genres.slice(0,3)):""}</div></button>`;
+  }).join("");
+}
+function setView(v){
+  if(v===S.view)return;
+  if(v==="cal"){S.calMonth=S.pick||ym(today());S.sel=""}
+  else{S.date="upcoming";S.pick="";S.shown=PAGE}
+  S.view=v;try{localStorage.setItem(VIEW_KEY,v)}catch(_){}
+  render();
+}
+$("viewSeg").addEventListener("click",e=>{const b=e.target.closest("[data-view]");if(b)setView(b.dataset.view)});
+$("calView").addEventListener("click",e=>{
+  const c=e.target.closest("[data-cal]");
+  if(c){const a=c.dataset.cal;if(a==="today"){S.calMonth=ym(today());S.sel=today()}else{S.calMonth=monthAdd(S.calMonth,a==="prev"?-1:1);S.sel=""}renderCal();return}
+  const g=e.target.closest("[data-cal-go]");if(g){S.calMonth=g.dataset.calGo;S.sel="";renderCal();return}
+  const d=e.target.closest("[data-day]");
+  if(d){S.sel=d.dataset.day;renderCal();
+    if(matchMedia("(max-width:900px)").matches){const p=$("dayPanel"),r=p.getBoundingClientRect();if(r.top>innerHeight-120)p.scrollIntoView({behavior:reduced()?"auto":"smooth",block:"start"})}}
+});
+let calMQ=matchMedia("(max-width:900px)");calMQ.addEventListener?.("change",()=>{if(S.view==="cal")renderCal()});
 
 function renderDetail(){
   const e=S.events.get(S.open)||S.pending.find(p=>p.id===S.open);
