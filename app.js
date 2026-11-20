@@ -93,7 +93,7 @@ const ROTATE_MS=4000;
 let nextTimer=null,nextIdx=0,nextKey="",nextPaused=false;
 function nextInner(e,label){
   return `<div class="dd">${label}</div>
-    <div class="rot" style="min-width:0"><div class="k">${label==="TODAY"?(e.end&&e.end>e.start?`${md(e.start)} – ${md(e.end)}`:`${md(e.start)} ${wd(e.start)}`):`NEXT UP · ${md(e.start)} ${wd(e.start)}`}${e.time?" · "+esc(e.time):""}</div><div class="t">${esc(e.title)}</div>${e.venue?`<div class="m">${esc(e.venue)}</div>`:""}</div>
+    <div class="rot" style="min-width:0"><div class="k">${label==="TODAY"?(e.end&&e.end>e.start?`${md(e.start)} – ${md(e.end)}`:`${md(e.start)} ${wd(e.start)}`):`NEXT UP · ${md(e.start)} ${wd(e.start)}`}</div><div class="t">${esc(e.title)}</div>${e.venue?`<div class="m">${esc(e.venue)}</div>`:""}</div>
     <span class="go">자세히 보기 →</span>`;
 }
 function renderNext(){
