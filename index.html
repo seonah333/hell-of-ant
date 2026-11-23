@@ -618,6 +618,11 @@ main .wrap>.head{margin-top:16px}
   .attend{grid-template-columns:1fr}
   .mebody,.plist,.mlist{padding-left:16px;padding-right:16px}
 }
+
+/* footer socials */
+.ft-socials{display:flex;flex-wrap:wrap;align-items:center;gap:12px 32px}
+.ft-insta .ig.kk{background:#fee500;color:#191600}
+@media (max-width:480px){.ft-socials{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}.ft-socials .ft-insta{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center}.ft-socials a.pill{min-width:96px;justify-content:center}}
 </style>
 
 </head>
@@ -692,12 +697,21 @@ main .wrap>.head{margin-top:16px}
       <div><b>THIS MONTH</b><span id="stMonth">–</span></div>
       <div><b>ALL</b><span id="stAll">–</span></div>
     </div>
+    <div class="ft-socials">
     <div class="ft-insta">
       <div class="who">
         <span class="ig" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.4" cy="6.6" r="1.3" fill="currentColor"/></svg></span>
         <span class="lab"><small>COMMUNITY</small><strong>@hoa__official</strong></span>
       </div>
       <a class="pill solid" href="https://www.instagram.com/hoa__official/" target="_blank" rel="noopener">FOLLOW ↗</a>
+    </div>
+    <div class="ft-insta ft-kakao">
+      <div class="who">
+        <span class="ig kk" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M12 4C7 4 3 7.1 3 11c0 2.5 1.7 4.7 4.2 5.9L6.5 20l3.6-2.3c.6.1 1.2.1 1.9.1 5 0 9-3.1 9-7s-4-6.8-9-6.8z" fill="currentColor"/></svg></span>
+        <span class="lab"><small>KAKAOTALK OPEN CHAT</small><strong>개미지옥</strong></span>
+      </div>
+      <a class="pill solid" href="https://open.kakao.com/o/gAZAmwDb" target="_blank" rel="noopener" aria-label="개미지옥 카카오톡 오픈채팅 참여하기">JOIN ↗</a>
+    </div>
     </div>
     <div class="ft-notes">
       <ul>
@@ -841,6 +855,6 @@ main .wrap>.head{margin-top:16px}
 <script defer src="/_vercel/insights/script.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
-<script src="app.js?v=19"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>
