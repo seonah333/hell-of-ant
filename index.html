@@ -52,8 +52,8 @@ button{cursor:pointer}
 .brand b{display:inline-flex;align-items:center;height:34px;padding:0 16px;border-radius:999px;background:linear-gradient(120deg,var(--violet-2),#ac9aff);color:var(--violet-ink);font-family:var(--head);font-weight:700;font-size:14px;letter-spacing:.02em;white-space:nowrap}
 .brand span{display:inline-flex;align-items:center;height:30px;padding:0 10px;border:1px solid var(--line);border-radius:6px;color:var(--fg);font-size:13px;font-weight:500;white-space:nowrap}
 /* marching ants: a dashed trail that slowly walks right */
-.dots-rule{height:2px;background:repeating-linear-gradient(90deg,var(--violet) 0 7px,transparent 7px 13px);background-size:13px 2px;opacity:.55;animation:march 1.6s linear infinite}
-@keyframes march{to{background-position:13px 0}}
+.dots-rule{height:3px;background-image:radial-gradient(circle,var(--violet) 1px,transparent 1.4px);background-size:8px 3px;background-position:0 50%;opacity:.75;animation:march 1.2s linear infinite}
+@keyframes march{to{background-position:8px 50%}}
 @media (prefers-reduced-motion:reduce){.dots-rule{animation:none}}
 
 .pill{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 14px;border-radius:6px;border:1px solid var(--line);background:var(--card-2);font-family:var(--body);font-weight:500;font-size:13.5px;white-space:nowrap;transition:background .15s,border-color .15s,color .15s}
@@ -523,6 +523,8 @@ main .wrap>.head{margin-top:16px}
 .kakao-login.lg{height:48px;width:100%;font-size:14.5px;border-radius:10px}
 .mebtn{width:36px;height:36px;padding:0;border-radius:50%;border:1px solid var(--line-2);background:var(--card-2);display:grid;place-items:center;overflow:hidden;flex:none}
 .mebtn .av{width:100%;height:100%;border:0;margin:0}
+.mebtn.guest{border-style:dashed;color:var(--muted);background:transparent}
+.mebtn.guest:hover{color:var(--fg);border-color:var(--violet)}
 .av{width:26px;height:26px;border-radius:50%;display:inline-grid;place-items:center;font-size:11px;font-weight:700;color:var(--violet-ink);border:2px solid var(--card);flex:none;object-fit:cover;background:var(--card-2)}
 .avs{display:inline-flex;align-items:center}.avs .av{margin-left:-7px}.avs .av:first-child{margin-left:0}
 .avs .av.more{background:var(--chip);color:var(--fg);font-size:10px}
@@ -839,6 +841,6 @@ main .wrap>.head{margin-top:16px}
 <script defer src="/_vercel/insights/script.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
-<script src="app.js?v=16"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>

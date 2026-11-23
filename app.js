@@ -635,8 +635,12 @@ async function loadMe(){
 function renderAccount(){
   const kb=$("kakaoBtn"),mb=$("meBtn");
   kb.hidden=true;
-  mb.hidden=!S.isKakao;
-  if(S.isKakao)mb.innerHTML=avatar(S.member||{nickname:kakaoName()});
+  const guest=!!sb&&!S.user;
+  mb.hidden=!(S.isKakao||guest);
+  mb.classList.toggle("guest",guest);
+  mb.setAttribute("aria-label",guest?"로그인":"내 정보");
+  if(guest)mb.innerHTML='<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  else if(S.isKakao)mb.innerHTML=avatar(S.member||{nickname:kakaoName()});
 }
 const kakaoName=()=>S.user?.user_metadata?.name||S.user?.user_metadata?.full_name||S.user?.user_metadata?.nickname||"";
 const kakaoAvatar=()=>{const u=S.user?.user_metadata?.avatar_url||S.user?.user_metadata?.picture||"";return u.replace(/^http:\/\//i,"https://")};
@@ -727,7 +731,11 @@ async function toggleAttend(id){
 function openGate(id,mode){
   const n=id?countOf(id):0;
   S.gateMode=mode;
-  if(mode==="add"){
+  if(mode==="login"){
+    $("gateTitle").textContent="개미지옥 크루로 시작해요";
+    $("gateText").textContent="카카오로 시작하면 가고 싶은 행사에 갈래요를 누르고, 같이 가는 크루를 볼 수 있어요.";
+    $("gateGhosts").innerHTML="";
+  }else if(mode==="add"){
     $("gateTitle").textContent="로그인하고 행사를 제보해 주세요";
     $("gateText").textContent="카카오로 로그인하면 가고 싶은 행사를 제보할 수 있어요. 운영진이 확인한 뒤 캘린더에 올라가요.";
     $("gateGhosts").innerHTML="";
@@ -854,7 +862,7 @@ async function setBlocked(uid,blocked){
 /* member events */
 $("kakaoBtn").onclick=kakaoLogin;
 $("gateKakao").onclick=()=>{closeSheet("gateScrim");const after=S.gateMode==="add"?"add":null;if(S.user){if(after){try{sessionStorage.setItem(AFTER_KEY,after)}catch(_){}}openJoin()}else kakaoLogin(after)};
-$("meBtn").onclick=openMe;
+$("meBtn").onclick=()=>{if(!S.user){openGate(null,"login");return}openMe()};
 $("joinForm").addEventListener("submit",submitJoin);
 $("joinLater").onclick=()=>closeSheet("joinScrim");
 $("j-genres").addEventListener("click",e=>{const b=e.target.closest("[data-jg]");if(!b)return;const g=b.dataset.jg;jGenres.has(g)?jGenres.delete(g):jGenres.add(g);renderJGenres()});
