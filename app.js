@@ -29,7 +29,7 @@ const uuid=()=>(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Ma
 /* ---------- state ---------- */
 const VIEW_KEY="hoa_view";
 const readView=()=>{try{return localStorage.getItem(VIEW_KEY)==="cal"?"cal":"list"}catch(_){return "list"}};
-const S={events:new Map(),pending:[],q:"",date:"upcoming",pick:"",genre:"",shown:PAGE,open:null,confirm:false,view:readView(),calMonth:"",sel:"",
+const S={events:new Map(),pending:[],q:"",date:"upcoming",pick:"",genre:"",shown:PAGE,open:null,confirm:false,view:readView(),calMonth:"",sel:"",member:null,isKakao:false,counts:new Map(),att:new Map(),myAtt:new Set(),meTab:"up",peopleQ:"",adminMembers:null,memberQ:"",blocking:null,reviewTab:"events",leaving:false,
   editing:null,editingPending:false,rejecting:null,loaded:false,user:null,isAdmin:false,adminName:"",flyer:{path:null,file:null,url:null}};
 
 const CFG=window.HOA_CONFIG||{};
@@ -138,6 +138,7 @@ function renderGrid(){
         <div class="ctitle">${esc(e.title)}</div>
         ${e.time?`<div class="ctime">${esc(e.time)}</div>`:""}
         ${(e.genres||[]).length?gtags(e.genres):""}
+        ${attLine(e)}
       </div></button>`;
   }).join("");
   $("moreBtn").hidden=items.length<=S.shown;
@@ -166,7 +167,7 @@ function renderView(){
   $("listView").hidden=cal;$("calView").hidden=!cal;$("dateGroup").hidden=cal;
   document.querySelectorAll("#viewSeg [data-view]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.view===S.view)));
 }
-function render(){renderView();renderFilters();renderNext();if(S.view==="cal")renderCal();else renderGrid();renderStats();renderAdmin();if(S.open)renderDetail()}
+function render(){renderView();renderAccount();renderCrew();renderFilters();renderNext();if(S.view==="cal")renderCal();else renderGrid();renderStats();renderAdmin();if(S.open)renderDetail();if(!$("meScrim").hidden)renderMe();if(!$("peopleScrim").hidden)renderPeople()}
 
 /* ---------- calendar ---------- */
 const KWD=["일","월","화","수","목","금","토"];
@@ -220,7 +221,7 @@ function renderDayPanel(evs,inMonth){
   $("dayPanel").innerHTML=head+list.map(e=>{
     const range=e.end&&e.end>e.start?`${md(e.start)}–${md(e.end)}`:"";
     const meta=[range,e.time,e.venue].filter(Boolean).map(esc).join(" · ");
-    return `<button type="button" class="dli${endOf(e)<t?" past":""}" data-open="${esc(e.id)}"><div class="th" aria-hidden="true">${flyerHTML(e)}</div><div style="min-width:0"><div class="t">${esc(e.title)}</div>${meta?`<div class="m">${meta}</div>`:""}${(e.genres||[]).length?gtags(e.genres.slice(0,3)):""}</div></button>`;
+    return `<button type="button" class="dli${endOf(e)<t?" past":""}" data-open="${esc(e.id)}"><div class="th" aria-hidden="true">${flyerHTML(e)}</div><div style="min-width:0"><div class="t">${esc(e.title)}</div>${meta?`<div class="m">${meta}</div>`:""}${(e.genres||[]).length?gtags(e.genres.slice(0,3)):""}${attLine(e)}</div></button>`;
   }).join("");
 }
 function setView(v){
@@ -252,6 +253,7 @@ function renderDetail(){
     <div class="date">${md(e.start)} ${wd(e.start)}${range}</div>
     <h2>${esc(e.title)}</h2>
     ${(e.genres||[]).length?gtags(e.genres):""}
+    ${attendHTML(e)}
     <div class="facts">
       <div><b>TIME</b><span>${esc(e.time||"미정")}</span></div>
       <div><b>VENUE</b><span>${esc(e.venue||"미정")}</span></div>
@@ -326,8 +328,10 @@ async function nativeShare(){
 
 function renderReview(){
   const box=$("reviewList");
-  if(!S.pending.length){box.innerHTML=`<div class="blank"><b>ALL CLEAR</b>승인 대기 중인 제보가 없어요.</div>`;return}
-  box.innerHTML=S.pending.map(e=>{
+  const tabs=`<div class="rtabs" role="group" aria-label="운영"><button type="button" data-rtab="events" aria-pressed="${S.reviewTab!=="members"}">행사 제보 ${S.pending.length}</button><button type="button" data-rtab="members" aria-pressed="${S.reviewTab==="members"}">멤버${S.adminMembers?" "+S.adminMembers.filter(m=>m.status==="member").length:""}</button></div>`;
+  if(S.reviewTab==="members"){box.innerHTML=tabs+renderMembersAdmin();return}
+  if(!S.pending.length){box.innerHTML=tabs+`<div class="blank" style="margin:16px 22px 22px"><b>ALL CLEAR</b>승인 대기 중인 제보가 없어요.</div>`;return}
+  box.innerHTML=tabs+S.pending.map(e=>{
     const c=e.contact||{};
     const range=e.end&&e.end>e.start?` – ${md(e.end)} ${wd(e.end)}`:"";
     return `<article class="pend">
@@ -371,7 +375,10 @@ async function refreshAuth(session){
     const {data}=await sb.rpc("is_admin");S.isAdmin=!!data;
     if(S.isAdmin){const r=await sb.from("admins").select("display_name").eq("user_id",S.user.id).maybeSingle();S.adminName=r.data?.display_name||"운영진"}
   }
-  renderAdmin();await loadPending();if(S.open)renderDetail();
+  await loadMe();
+  if(S.isKakao&&!S.member)openJoin();else runAfterLogin();
+  S.adminMembers=null;
+  render();await Promise.all([loadPending(),loadAttendance()]);
 }
 
 /* image: shrink large photos before upload */
@@ -398,20 +405,20 @@ async function uploadFlyer(file,folder){
 document.addEventListener("click",ev=>{
   const o=ev.target.closest("[data-open]");if(o){openDetail(o.dataset.open);return}
   if(ev.target.id==="resetBtn"){S.q="";$("q").value="";S.genre="";S.pick="";S.date="upcoming";S.shown=PAGE;render()}
-  if(ev.target.closest("#emptyAdd"))openForm(null);
+  if(ev.target.closest("#emptyAdd"))requestAdd();
 });
 $("dateTags").addEventListener("click",e=>{const b=e.target.closest("[data-date]");if(!b)return;S.date=b.dataset.date;S.pick="";S.shown=PAGE;render()});
 $("dateTags").addEventListener("change",e=>{if(e.target.id==="pick"){S.pick=e.target.value;S.shown=PAGE;render()}});
 $("genreTags").addEventListener("click",e=>{const b=e.target.closest("[data-genre]");if(!b)return;S.genre=b.dataset.genre;S.shown=PAGE;render()});
 let qT;$("q").addEventListener("input",e=>{clearTimeout(qT);qT=setTimeout(()=>{S.q=e.target.value.trim();S.shown=PAGE;render()},120)});
 $("moreBtn").onclick=()=>{S.shown+=PAGE;renderGrid()};
-$("addBtn").onclick=()=>openForm(null);
+$("addBtn").onclick=()=>requestAdd();
 $("copyBtn").onclick=copyShareUrl;
 $("shareUrl").addEventListener("focus",e=>e.target.select());
 $("kakaoShareBtn").onclick=kakaoShare;
 $("nativeShareBtn").onclick=nativeShare;
 $("toTop").onclick=()=>window.scrollTo({top:0,behavior:reduced()?"auto":"smooth"});
-$("reviewBtn").onclick=()=>{S.rejecting=null;renderReview();openSheet("reviewScrim");loadPending()};
+$("reviewBtn").onclick=()=>{S.rejecting=null;S.blocking=null;if(S.reviewTab==="members")loadMembersAdmin();renderReview();openSheet("reviewScrim");loadPending()};
 $("adminLink").onclick=async()=>{
   if(!sb){toast("아직 서비스 설정이 끝나지 않았어요");return}
   if(S.user){await sb.auth.signOut();toast("로그아웃했어요");return}
@@ -421,6 +428,8 @@ $("adminLink").onclick=async()=>{
 $("detailScrim").addEventListener("click",async e=>{
   if(e.target===$("detailScrim")||e.target.closest("#closeDetail")){closeDetail();return}
   const t=e.target.closest("button");if(!t)return;
+  if(t.id==="attendBtn"){toggleAttend(S.open);return}
+  if(t.id==="peopleBtn"){openPeople(S.open);return}
   if(t.id==="delBtn"){S.confirm=true;renderDetail()}
   else if(t.id==="delNo"){S.confirm=false;renderDetail()}
   else if(t.id==="delYes"){await removeEvent(S.open)}
@@ -430,6 +439,11 @@ $("detailScrim").addEventListener("click",async e=>{
 $("reviewScrim").addEventListener("click",async e=>{
   if(e.target===$("reviewScrim")||e.target.closest("#closeReview")){closeSheet("reviewScrim");return}
   const t=e.target.closest("button");if(!t)return;const d=t.dataset;
+  if(d.rtab){S.reviewTab=d.rtab;S.blocking=null;if(d.rtab==="members")loadMembersAdmin();renderReview();return}
+  if(d.block){S.blocking=d.block;renderReview();return}
+  if(d.blockNo){S.blocking=null;renderReview();return}
+  if(d.blockYes){t.disabled=true;await setBlocked(d.blockYes,true);return}
+  if(d.unblock){t.disabled=true;await setBlocked(d.unblock,false);return}
   if(d.approve){t.disabled=true;await approve(d.approve,null)}
   else if(d.editPending){closeSheet("reviewScrim");openForm(d.editPending,true)}
   else if(d.reject){S.rejecting=d.reject;renderReview()}
@@ -437,8 +451,9 @@ $("reviewScrim").addEventListener("click",async e=>{
   else if(d.rejYes){t.disabled=true;await removeEvent(d.rejYes,true)}
 });
 ["loginScrim","doneScrim","shareScrim"].forEach(id=>$(id).addEventListener("click",e=>{if(e.target===$(id)||e.target.closest("[data-close]"))closeSheet(id)}));
+$("reviewList").addEventListener("input",e=>{if(e.target.id==="memberQ"){S.memberQ=e.target.value;const pos=e.target.selectionStart;renderReview();const i=$("memberQ");if(i){i.focus();i.setSelectionRange(pos,pos)}}});
 document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;
-  for(const id of ["shareScrim","formScrim","loginScrim","doneScrim","reviewScrim"])if(!$(id).hidden){id==="formScrim"?closeForm():closeSheet(id);return}
+  for(const id of ["gateScrim","peopleScrim","joinScrim","meScrim","shareScrim","formScrim","loginScrim","doneScrim","reviewScrim"])if(!$(id).hidden){id==="formScrim"?closeForm():closeSheet(id);return}
   if(!$("detailScrim").hidden)closeDetail()});
 
 $("loginForm").addEventListener("submit",async e=>{
@@ -483,7 +498,7 @@ function openForm(id,fromPending){
   $("formLead").textContent=admin?(fromPending?"내용을 다듬은 뒤 승인하면 바로 게시돼요.":"운영진이 등록한 일정은 바로 게시돼요."):"제보한 일정은 운영진이 확인한 뒤 게시돼요.";
   $("f-title").value=e?.title||"";$("f-start").value=e?.start||(S.pick&&S.pick!==ym(today())?S.pick+"-01":today());$("f-end").value=e?.end||"";$("f-time").value=e?.time||"";
   $("f-venue").value=e?.venue||"";$("f-url").value=e?.url||"";$("f-kakao").value=e?.kakao||"";$("f-memo").value=e?.memo||"";
-  $("f-insta").value="";$("f-note").value="";$("f-credit").checked=true;$("f-hp").value="";
+  $("f-insta").value=S.member?.instagram?"@"+S.member.instagram:"";$("f-note").value="";$("f-credit").checked=true;$("f-hp").value="";
   $("submitter").hidden=admin;
   fGenres=new Set(e?.genres||[]);renderFormGenres();
   $("f-flyer").value="";S.flyer={path:e?.flyerPath||null,file:null,url:e?.flyer||null};setFlyerPreview(S.flyer.url);
@@ -551,7 +566,7 @@ $("form").addEventListener("submit",async ev=>{
 async function approve(id){
   const {error}=await sb.from("events").update({status:"approved",posted_by_name:S.adminName,reviewed_at:new Date().toISOString(),reviewed_by:S.user.id}).eq("id",id);
   if(error){toast("승인하지 못했어요. 다시 시도해 주세요");renderReview();return}
-  toast("승인해서 게시했어요");await Promise.all([loadEvents(),loadPending()]);renderReview();
+  toast("승인해서 게시했어요");await Promise.all([loadEvents(),loadPending()]);loadCounts();renderReview();
 }
 async function removeEvent(id,isReject){
   const e=S.events.get(id)||S.pending.find(p=>p.id===id);
@@ -563,6 +578,314 @@ async function removeEvent(id,isReject){
   await Promise.all([loadEvents(),loadPending()]);if(isReject)renderReview();
 }
 
+/* ---------- members · 갈래요 ---------- */
+const AVC=["#b9a8ff","#fda4af","#86efac","#fcd34d","#93c5fd","#f0abfc","#fdba74","#a5f3fc"];
+function avatar(m,cls=""){
+  const name=m?.nickname||"?";
+  if(m?.avatar_url&&/^https:\/\//i.test(m.avatar_url))return `<img class="av ${cls}" src="${esc(m.avatar_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">`;
+  return `<span class="av ${cls}" style="background:${AVC[hue(name)%AVC.length]}" aria-hidden="true">${esc([...name][0]||"?")}</span>`;
+}
+function avStack(list,max=3,total){
+  const n=total??list.length,shown=list.slice(0,max);
+  return `<span class="avs">${shown.map(a=>avatar(a.m)).join("")}${n>shown.length?`<span class="av more">+${n-shown.length}</span>`:""}</span>`;
+}
+const ghosts=n=>`<span class="ghosts">${Array.from({length:Math.min(n,4)},(_,i)=>`<span class="ghost" style="background:${AVC[(i*3+1)%AVC.length]}"></span>`).join("")}</span>`;
+const isMember=()=>S.member?.status==="member";
+const canSeeCrew=()=>isMember()||S.isAdmin;
+const countOf=id=>S.counts.get(id)||0;
+const mine=id=>S.myAtt.has(id);
+function attendeesOf(id){
+  const list=(S.att.get(id)||[]).filter(a=>a.m);
+  return list.sort((a,b)=>(b.user_id===S.user?.id)-(a.user_id===S.user?.id)||a.created_at.localeCompare(b.created_at));
+}
+function attLine(e){
+  const n=countOf(e.id);if(!n)return "";
+  const past=endOf(e)<today();
+  return `<div class="attline${mine(e.id)?" mine":""}">♥ ${mine(e.id)?(n>1?`나 포함 ${n}명`:"나도 가요"):`${n}명이 ${past?"갔어요":"가요"}`}</div>`;
+}
+async function loadCounts(){
+  if(!sb)return;
+  const {data,error}=await sb.rpc("attend_counts");
+  if(error)return;
+  S.counts=new Map(data.map(r=>[r.event_id,r.n]));render();
+}
+async function loadAttendance(){
+  S.att=new Map();S.myAtt=new Set();
+  if(!sb||!canSeeCrew()){render();return}
+  const {data,error}=await sb.from("attendance").select("event_id,user_id,created_at,members(nickname,avatar_url,instagram,genres)").limit(5000);
+  if(error){render();return}
+  for(const r of data){
+    if(!r.members)continue;
+    const a={user_id:r.user_id,created_at:r.created_at,m:r.members};
+    if(!S.att.has(r.event_id))S.att.set(r.event_id,[]);
+    S.att.get(r.event_id).push(a);
+    if(r.user_id===S.user?.id)S.myAtt.add(r.event_id);
+  }
+  render();
+}
+async function loadMe(){
+  S.member=null;S.isKakao=false;
+  if(!S.user)return;
+  S.isKakao=S.user.app_metadata?.provider==="kakao"||(S.user.identities||[]).some(i=>i.provider==="kakao");
+  const {data}=await sb.from("members").select("*").eq("user_id",S.user.id).maybeSingle();
+  S.member=data||null;
+}
+
+/* account chrome */
+function renderAccount(){
+  const kb=$("kakaoBtn"),mb=$("meBtn");
+  kb.hidden=true;
+  mb.hidden=!S.isKakao;
+  if(S.isKakao)mb.innerHTML=avatar(S.member||{nickname:kakaoName()});
+}
+const kakaoName=()=>S.user?.user_metadata?.name||S.user?.user_metadata?.full_name||S.user?.user_metadata?.nickname||"";
+const kakaoAvatar=()=>{const u=S.user?.user_metadata?.avatar_url||S.user?.user_metadata?.picture||"";return u.replace(/^http:\/\//i,"https://")};
+const AFTER_KEY="hoa_after_login";
+function requestAdd(){
+  if(!sb){toast("아직 서비스 설정이 끝나지 않았어요");return}
+  if(S.isAdmin){openForm(null);return}
+  if(!S.user){openGate(null,"add");return}
+  if(S.member?.status==="blocked"){toast("이용이 제한된 계정이에요");return}
+  if(!S.member){try{sessionStorage.setItem(AFTER_KEY,"add")}catch(_){}openJoin();return}
+  openForm(null);
+}
+function runAfterLogin(){
+  let a=null;try{a=sessionStorage.getItem(AFTER_KEY)}catch(_){}
+  if(a!=="add"||!S.member||S.member.status!=="member")return;
+  try{sessionStorage.removeItem(AFTER_KEY)}catch(_){}
+  openForm(null);
+}
+async function kakaoLogin(after){
+  if(!sb){toast("아직 서비스 설정이 끝나지 않았어요");return}
+  try{after?sessionStorage.setItem(AFTER_KEY,after):sessionStorage.removeItem(AFTER_KEY)}catch(_){}
+  const {error}=await sb.auth.signInWithOAuth({provider:"kakao",options:{redirectTo:location.origin+location.pathname+location.search}});
+  if(error)toast("카카오 로그인을 시작하지 못했어요. 잠시 후 다시 시도해 주세요");
+}
+
+/* crew week */
+function weekRange(){
+  const d=parse(today()),dow=(d.getDay()+6)%7;d.setDate(d.getDate()-dow);
+  const start=ymd(d);return [start,addDays(start,6)];
+}
+function renderCrew(){
+  const box=$("crewBox");if(!box)return;
+  if(S.member?.status==="blocked"){box.innerHTML=`<div class="notice">이용이 제한된 계정이에요. 운영진에게 인스타그램 DM으로 문의해 주세요.</div>`;return}
+  const [ws,we]=weekRange(),t=today();
+  const list=[...S.events.values()].filter(e=>e.start<=we&&endOf(e)>=ws&&endOf(e)>=t&&countOf(e.id)>0)
+    .sort((a,b)=>a.start.localeCompare(b.start)||(a.time||"99").localeCompare(b.time||"99"));
+  const head=`<div class="crew-h"><b>이번 주 크루 동선</b><span>${md(ws)} – ${md(we)}</span></div>`;
+  if(canSeeCrew()){
+    if(!S.loaded){box.innerHTML="";return}
+    if(!list.length){box.innerHTML=`<section class="crew" aria-label="이번 주 크루 동선">${head}<div class="crew-empty">이번 주는 아직 조용해요. 가고 싶은 행사에 갈래요를 눌러 보세요.</div></section>`;return}
+    box.innerHTML=`<section class="crew" aria-label="이번 주 크루 동선">${head}${list.map(e=>{
+      const d=e.start<ws?ws:e.start,n=countOf(e.id);
+      return `<button class="crow" data-open="${esc(e.id)}"><span class="cd">${wd(d)}<b>${parse(d).getDate()}</b></span>
+        <span style="min-width:0"><span class="ct" style="display:block">${esc(e.title)}</span><span class="cm" style="display:block">${esc([e.venue,e.time].filter(Boolean).join(" · "))}</span></span>
+        <span class="cr">${mine(e.id)?'<span class="badge-me">나도</span>':""}${avStack(attendeesOf(e.id),3,n)}</span></button>`;}).join("")}</section>`;
+    return;
+  }
+  if(!list.length||!sb){box.innerHTML="";return}
+  const total=list.reduce((s,e)=>s+countOf(e.id),0);
+  box.innerHTML=`<section class="crew" aria-label="이번 주 크루 동선">${head}${list.slice(0,3).map(e=>{const d=e.start<ws?ws:e.start;
+    return `<button class="crow" data-open="${esc(e.id)}"><span class="cd">${wd(d)}<b>${parse(d).getDate()}</b></span><span style="min-width:0"><span class="ct" style="display:block">${esc(e.title)}</span><span class="cm" style="display:block">${esc(e.venue||"")}</span></span><span class="cn">${countOf(e.id)}명</span></button>`}).join("")}
+    <div class="crew-cta"><p>${ghosts(total)}<span>이번 주 크루 ${total}명이 움직여요. 누가 가는지는 멤버만 볼 수 있어요.</span></p>
+    <button class="pill kakao-login lg" type="button" data-kakao="1"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4C7 4 3 7.1 3 11c0 2.5 1.7 4.7 4.2 5.9L6.5 20l3.6-2.3c.6.1 1.2.1 1.9.1 5 0 9-3.1 9-7s-4-6.8-9-6.8z" fill="currentColor"/></svg>${S.user?"멤버 가입하고 같이 가는 사람 보기":"카카오로 시작하고 누가 가는지 보기"}</button></div></section>`;
+}
+
+/* detail block */
+function attendHTML(e){
+  if(e.status==="pending")return "";
+  const n=countOf(e.id),on=mine(e.id),past=endOf(e)<t0();
+  const verb=past?"갔어요":"가요";
+  const people=canSeeCrew()&&n?`${avStack(attendeesOf(e.id),4,n)}<span class="t"><b>${n}명</b>이 ${verb}</span><i>보기 ›</i>`
+    :n?`${ghosts(n)}<span class="t"><b>${n}명</b>이 ${verb}</span><i>›</i>`:`<span class="t" style="color:var(--muted)">아직 아무도 없어요. 첫 번째로 눌러 보세요</span>`;
+  return `<div class="attend"><button class="pill attend-btn${on?" on":""}" id="attendBtn" type="button" aria-pressed="${on}">${on?"♥":"♡"} ${past?"갔어요":"갈래요"}</button>
+    <button class="people" id="peopleBtn" type="button"${n?"":" disabled"}>${people}</button></div>`;
+}
+const t0=()=>today();
+let attBusy=false;
+async function toggleAttend(id){
+  if(!S.user){openGate(id,"guest");return}
+  if(S.isAdmin&&!S.isKakao){toast("운영진 계정으로는 갈래요를 누를 수 없어요. 카카오로 로그인해 주세요");return}
+  if(!S.member){openJoin();return}
+  if(S.member.status!=="member"){toast("이용이 제한된 계정이에요");return}
+  if(attBusy)return;attBusy=true;
+  const on=!mine(id),me={user_id:S.user.id,created_at:new Date().toISOString(),m:{nickname:S.member.nickname,avatar_url:S.member.avatar_url,instagram:S.member.instagram,genres:S.member.genres}};
+  const apply=v=>{
+    if(v){S.myAtt.add(id);if(!S.att.has(id))S.att.set(id,[]);S.att.get(id).push(me);S.counts.set(id,countOf(id)+1)}
+    else{S.myAtt.delete(id);S.att.set(id,(S.att.get(id)||[]).filter(a=>a.user_id!==S.user.id));S.counts.set(id,Math.max(0,countOf(id)-1))}
+    render();
+  };
+  apply(on);
+  const q=on?sb.from("attendance").insert({event_id:id,user_id:S.user.id}):sb.from("attendance").delete().eq("event_id",id).eq("user_id",S.user.id);
+  const {error}=await q;attBusy=false;
+  if(error&&!(on&&error.code==="23505")){apply(!on);toast("저장하지 못했어요. 다시 눌러 주세요");return}
+  if(on){const e=S.events.get(id);toast(e&&endOf(e)<today()?"다녀온 행사로 기록했어요":"갈래요! 내 일정에 추가했어요")}
+}
+
+/* gate (E01) */
+function openGate(id,mode){
+  const n=id?countOf(id):0;
+  S.gateMode=mode;
+  if(mode==="add"){
+    $("gateTitle").textContent="로그인하고 행사를 제보해 주세요";
+    $("gateText").textContent="카카오로 로그인하면 가고 싶은 행사를 제보할 수 있어요. 운영진이 확인한 뒤 캘린더에 올라가요.";
+    $("gateGhosts").innerHTML="";
+  }else{
+    $("gateTitle").textContent="크루 멤버만 갈래요를 누를 수 있어요";
+    $("gateText").textContent=n?`카카오로 시작하면 이 행사에 같이 가는 멤버 ${n}명을 볼 수 있어요.`:"카카오로 시작하면 가고 싶은 행사를 표시하고, 같이 가는 크루를 볼 수 있어요.";
+    $("gateGhosts").innerHTML=n?ghosts(n):"";
+  }
+  openSheet("gateScrim");
+}
+
+/* people (S08) */
+let peopleFor=null;
+function openPeople(id){
+  if(!canSeeCrew()){openGate(id,"guest");return}
+  peopleFor=id;S.peopleQ="";renderPeople();openSheet("peopleScrim");
+}
+function renderPeople(){
+  const e=S.events.get(peopleFor);if(!e){closeSheet("peopleScrim");return}
+  const all=attendeesOf(peopleFor),q=(S.peopleQ||"").toLowerCase();
+  const list=q?all.filter(a=>(a.m.nickname+" "+(a.m.instagram||"")).toLowerCase().includes(q)):all;
+  $("peopleTitle").textContent=`${endOf(e)<today()?"같이 간":"같이 가는"} 멤버 ${all.length}`;
+  $("peopleBody").innerHTML=`<div class="plist">
+    <div class="sub" style="color:var(--muted);font-size:13px">${esc(e.title)} · ${md(e.start)} ${wd(e.start)}</div>
+    ${all.length>12?`<label class="search"><input id="peopleQ" type="search" placeholder="닉네임 검색" value="${esc(S.peopleQ||"")}" aria-label="닉네임 검색"></label>`:""}
+    ${list.map(a=>`<div class="prow">${avatar(a.m)}<span class="pn"><b>${esc(a.m.nickname)}${a.user_id===S.user?.id?'<span class="badge-me">나</span>':""}</b><small>${esc((a.m.genres||[]).join(" · ")||" ")}</small></span>${a.m.instagram?`<a href="https://www.instagram.com/${encodeURIComponent(a.m.instagram)}/" target="_blank" rel="noopener">@${esc(a.m.instagram)} ↗</a>`:""}</div>`).join("")||`<div style="color:var(--muted)">검색 결과가 없어요.</div>`}
+  </div>`;
+}
+
+/* join (S03) */
+let jGenres=new Set(),joinEdit=false;
+function openJoin(edit){
+  if(!S.user)return;
+  joinEdit=!!edit;const m=S.member;
+  $("joinTitle").textContent=edit?"EDIT PROFILE":"JOIN";
+  $("joinLead").textContent=edit?"닉네임과 인스타그램, 좋아하는 장르를 고칠 수 있어요.":"개미지옥 멤버가 되면 같이 가는 크루를 볼 수 있어요. 가입하면 바로 멤버가 돼요.";
+  $("joinProfile").innerHTML=`${avatar({nickname:m?.nickname||kakaoName()||"?",avatar_url:m?.avatar_url||kakaoAvatar()})}<span><b>${esc(kakaoName()||m?.kakao_name||"카카오 계정")}</b><small>카카오 계정으로 로그인했어요</small></span>`;
+  $("j-nick").value=m?.nickname||kakaoName().slice(0,20);
+  $("j-insta").value=m?.instagram?"@"+m.instagram:"";
+  jGenres=new Set(m?.genres||[]);renderJGenres();
+  $("j-consent").hidden=!!edit;$("j-age").checked=false;$("j-rule").checked=false;
+  ["j-nick-err","j-insta-err","j-consent-err"].forEach(i=>$(i).hidden=true);
+  $("j-nick-wrap").classList.remove("bad");$("j-insta-wrap").classList.remove("bad");
+  $("joinLater").textContent=edit?"취소":"나중에 할게요";
+  $("joinSend").textContent=edit?"저장":"멤버로 시작하기";
+  closeSheet("meScrim");closeSheet("gateScrim");openSheet("joinScrim");
+  setTimeout(()=>$("j-nick").focus(),30);
+}
+function renderJGenres(){$("j-genres").innerHTML=GENRES.filter(g=>g!=="ETC").map(g=>`<button type="button" class="tag${hl(g)}" data-jg="${esc(g)}" aria-pressed="${jGenres.has(g)}">${esc(g)}</button>`).join("")}
+function joinErr(id,wrap,msg){const el=$(id);el.textContent=msg;el.hidden=!msg;if(wrap)$(wrap).classList.toggle("bad",!!msg)}
+async function submitJoin(ev){
+  ev.preventDefault();
+  const nick=$("j-nick").value.trim(),insta=$("j-insta").value.trim().replace(/^@+/,"").toLowerCase();
+  let bad=false;
+  joinErr("j-nick-err","j-nick-wrap",!nick?"닉네임을 입력해 주세요.":[...nick].length>20?"20자 이내로 입력해 주세요.":"");if(!nick||[...nick].length>20)bad=true;
+  const ib=insta&&!/^[a-z0-9._]{1,30}$/.test(insta);joinErr("j-insta-err","j-insta-wrap",ib?"영문 소문자, 숫자, 마침표, 밑줄만 쓸 수 있어요.":"");if(ib)bad=true;
+  if(!joinEdit){const ok=$("j-age").checked&&$("j-rule").checked;$("j-consent-err").hidden=ok;if(!ok)bad=true}
+  if(bad){const f=$("joinForm").querySelector(".bad input,.consent .err:not([hidden])");f?.scrollIntoView({block:"center",behavior:reduced()?"auto":"smooth"});return}
+  const b=$("joinSend");b.disabled=true;const label=b.textContent;b.textContent="저장 중…";
+  const {error}=await sb.rpc("join_member",{p_nickname:nick,p_instagram:insta||null,p_genres:[...jGenres]});
+  b.disabled=false;b.textContent=label;
+  if(error){
+    const m=error.message||"";
+    toast(/blocked/.test(m)?"이용이 제한된 계정이에요. 운영진에게 문의해 주세요":/invalid_instagram/.test(m)?"인스타그램 아이디를 확인해 주세요":/invalid_nickname/.test(m)?"닉네임을 확인해 주세요":"저장하지 못했어요. 다시 눌러 주세요");
+    return;
+  }
+  const first=!S.member;
+  await loadMe();closeSheet("joinScrim");renderAccount();
+  toast(first?"개미지옥 멤버가 됐어요! 가고 싶은 행사에 갈래요를 눌러 보세요":"프로필을 저장했어요");
+  await loadAttendance();
+  runAfterLogin();
+}
+
+/* me (S09) */
+function openMe(){
+  if(!S.member){openJoin();return}
+  S.meTab=S.meTab||"up";S.leaving=false;renderMe();openSheet("meScrim");
+}
+function renderMe(){
+  const m=S.member;if(!m){closeSheet("meScrim");return}
+  const t=today(),evs=[...S.myAtt].map(id=>S.events.get(id)).filter(Boolean);
+  const up=evs.filter(e=>endOf(e)>=t).sort((a,b)=>a.start.localeCompare(b.start));
+  const past=evs.filter(e=>endOf(e)<t).sort((a,b)=>b.start.localeCompare(a.start));
+  const list=S.meTab==="past"?past:up;
+  $("meBody").innerHTML=`<div class="mebody">
+    <div class="mehead">${avatar(m)}<span style="min-width:0;flex:1"><b>${esc(m.nickname)}</b> <span class="badge-me">멤버</span><small>${[m.instagram?"@"+esc(m.instagram):"",esc((m.genres||[]).join(", "))].filter(Boolean).join(" · ")||"프로필을 채워 보세요"}</small></span></div>
+    <div class="segtabs" role="group" aria-label="내 일정"><button type="button" data-metab="up" aria-pressed="${S.meTab!=="past"}">다가오는 ${up.length}</button><button type="button" data-metab="past" aria-pressed="${S.meTab==="past"}">다녀온 ${past.length}</button></div>
+    <div class="mylist">${list.length?list.map(e=>{const n=countOf(e.id)-1;return `<button type="button" class="dli" data-open="${esc(e.id)}"><div class="th" aria-hidden="true">${flyerHTML(e)}</div><div style="min-width:0"><div class="t">${esc(e.title)}</div><div class="m">${md(e.start)} ${wd(e.start)}${e.venue?" · "+esc(e.venue):""}</div><div class="attline">${n>0?`나 외 ${n}명`:"아직 나 혼자"}</div></div></button>`}).join("")
+      :`<div class="crew-empty" style="border:0">${S.meTab==="past"?"다녀온 행사가 아직 없어요.":"아직 갈래요한 행사가 없어요. 이번 주 크루 동선에서 골라 보세요."}</div>`}</div>
+    <div class="melinks"><button type="button" class="pill kr" id="meEdit">프로필 수정</button><button type="button" class="pill kr" id="meLogout">로그아웃</button></div>
+    ${S.leaving?`<div class="confirm">탈퇴하면 프로필과 갈래요 기록이 바로 지워지고 되돌릴 수 없어요.<div class="acts"><button type="button" class="pill danger kr" id="leaveYes">탈퇴하기</button><button type="button" class="pill kr" id="leaveNo">취소</button></div></div>`
+      :`<div class="textlinks"><button type="button" id="meLeave">탈퇴하기</button></div>`}
+  </div>`;
+}
+
+/* admin: members tab */
+async function loadMembersAdmin(){
+  if(!S.isAdmin)return;
+  const {data,error}=await sb.from("members").select("user_id,nickname,kakao_name,instagram,avatar_url,status,created_at").order("created_at",{ascending:false}).limit(1000);
+  if(error){toast("멤버 목록을 불러오지 못했어요");return}
+  S.adminMembers=data;if(!$("reviewScrim").hidden)renderReview();
+}
+function renderMembersAdmin(){
+  const all=S.adminMembers;
+  if(!all)return `<div class="mlist"><div class="blank"><b>LOADING</b>멤버 목록을 불러오는 중이에요…</div></div>`;
+  const q=(S.memberQ||"").toLowerCase();
+  const list=q?all.filter(m=>[m.nickname,m.kakao_name,m.instagram].join(" ").toLowerCase().includes(q)):all;
+  const n=all.filter(m=>m.status==="member").length;
+  return `<div class="mlist"><div class="who" style="padding-top:12px">멤버 ${n}명${all.length>n?` · 차단 ${all.length-n}명`:""} · 카카오로 가입하면 바로 멤버가 돼요</div>
+    <label class="search"><input id="memberQ" type="search" placeholder="닉네임, 카카오 이름, 인스타 검색" value="${esc(S.memberQ||"")}" aria-label="멤버 검색"></label>
+    ${list.map(m=>`<div class="mrow${m.status==="blocked"?" blocked":""}"><div class="prow">${avatar(m)}<span class="pn"><b>${esc(m.nickname)}${m.status==="blocked"?' <span class="badge-me" style="background:var(--danger)">차단</span>':""}</b><small>카카오: ${esc(m.kakao_name||"-")}${m.instagram?` · @${esc(m.instagram)}`:""} · ${m.created_at.slice(5,10).replace("-",".")} 가입</small></span></div>
+      ${S.blocking===m.user_id?`<span class="acts"><button class="pill danger kr" data-block-yes="${esc(m.user_id)}">차단</button><button class="pill kr" data-block-no="1">취소</button></span>`
+        :m.status==="blocked"?`<button class="pill kr" data-unblock="${esc(m.user_id)}">해제</button>`:`<button class="pill kr" data-block="${esc(m.user_id)}">차단</button>`}</div>`).join("")||`<div class="who" style="padding:16px 0">${q?"검색 결과가 없어요.":"아직 가입한 멤버가 없어요."}</div>`}
+  </div>`;
+}
+async function setBlocked(uid,blocked){
+  const {error}=await sb.from("members").update(blocked?{status:"blocked",blocked_at:new Date().toISOString(),blocked_by:S.user.id}:{status:"member",blocked_at:null,blocked_by:null}).eq("user_id",uid);
+  S.blocking=null;
+  if(error){toast("처리하지 못했어요. 다시 시도해 주세요");renderReview();return}
+  toast(blocked?"차단했어요. 갈래요 목록에서도 빠져요":"차단을 해제했어요");
+  await loadMembersAdmin();loadCounts();loadAttendance();
+}
+
+/* member events */
+$("kakaoBtn").onclick=kakaoLogin;
+$("gateKakao").onclick=()=>{closeSheet("gateScrim");const after=S.gateMode==="add"?"add":null;if(S.user){if(after){try{sessionStorage.setItem(AFTER_KEY,after)}catch(_){}}openJoin()}else kakaoLogin(after)};
+$("meBtn").onclick=openMe;
+$("joinForm").addEventListener("submit",submitJoin);
+$("joinLater").onclick=()=>closeSheet("joinScrim");
+$("j-genres").addEventListener("click",e=>{const b=e.target.closest("[data-jg]");if(!b)return;const g=b.dataset.jg;jGenres.has(g)?jGenres.delete(g):jGenres.add(g);renderJGenres()});
+$("j-nick").addEventListener("input",()=>{if(!$("j-nick-err").hidden&&$("j-nick").value.trim())joinErr("j-nick-err","j-nick-wrap","")});
+$("j-insta").addEventListener("input",()=>{if(!$("j-insta-err").hidden)joinErr("j-insta-err","j-insta-wrap","")});
+["j-age","j-rule"].forEach(id=>$(id).addEventListener("change",()=>{if($("j-age").checked&&$("j-rule").checked)$("j-consent-err").hidden=true}));
+$("crewBox").addEventListener("click",e=>{if(e.target.closest("[data-kakao]")){S.user?openJoin():kakaoLogin()}});
+$("peopleBody").addEventListener("input",e=>{if(e.target.id==="peopleQ"){S.peopleQ=e.target.value;const pos=e.target.selectionStart;renderPeople();const i=$("peopleQ");if(i){i.focus();i.setSelectionRange(pos,pos)}}});
+$("meBody").addEventListener("click",async e=>{
+  const t=e.target.closest("button");if(!t)return;
+  if(t.dataset.metab){S.meTab=t.dataset.metab;renderMe()}
+  else if(t.dataset.open){closeSheet("meScrim")}
+  else if(t.id==="meEdit")openJoin(true);
+  else if(t.id==="meLogout"){await sb.auth.signOut();closeSheet("meScrim");toast("로그아웃했어요")}
+  else if(t.id==="meLeave"){S.leaving=true;renderMe()}
+  else if(t.id==="leaveNo"){S.leaving=false;renderMe()}
+  else if(t.id==="leaveYes"){t.disabled=true;const {error}=await sb.rpc("delete_me");if(error){t.disabled=false;toast("탈퇴하지 못했어요. 운영진에게 문의해 주세요");return}
+    await sb.auth.signOut();closeSheet("meScrim");toast("탈퇴했어요. 그동안 고마웠어요")}
+});
+["joinScrim","meScrim","peopleScrim","gateScrim"].forEach(id=>$(id).addEventListener("click",e=>{if(e.target===$(id)||e.target.closest("[data-close]"))closeSheet(id)}));
+$("peopleBody").addEventListener("click",e=>{if(e.target.closest("[data-open]"))closeSheet("peopleScrim")});
+
+/* OAuth 에러로 돌아온 경우 */
+(function oauthError(){
+  const h=new URLSearchParams(location.hash.slice(1)),q=new URLSearchParams(location.search);
+  const msg=h.get("error_description")||q.get("error_description");
+  if(!msg)return;
+  try{["error","error_code","error_description"].forEach(k=>q.delete(k));history.replaceState(null,"",location.pathname+(q.toString()?"?"+q:""))}catch(_){}
+  setTimeout(()=>toast(/email/i.test(msg)?"카카오 로그인 설정(이메일) 문제로 로그인하지 못했어요. 운영진에게 알려 주세요":/signup|sign up|not allowed/i.test(msg)?"지금은 가입을 받을 수 없어요. 운영진에게 알려 주세요":"카카오 로그인에 실패했어요. 다시 시도해 주세요"),400);
+})();
+
 /* ---------- boot ---------- */
 render();
 if(!sb){
@@ -572,6 +895,7 @@ if(!sb){
 }else{
   const timer=setTimeout(()=>{if(!S.loaded)setStatus("일정을 불러오는 데 시간이 걸리고 있어요…")},8000);
   loadEvents().finally(()=>clearTimeout(timer));
+  loadCounts();
   // supabase-js: don't await other calls inside this callback; defer instead
   sb.auth.onAuthStateChange((_evt,session)=>{setTimeout(()=>refreshAuth(session),0)});
 }
