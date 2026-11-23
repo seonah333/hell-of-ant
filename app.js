@@ -68,12 +68,23 @@ function list(ignore){
 }
 
 /* ---------- render ---------- */
+const GENRE_KEY="hoa_genre_open";
+function readGenreOpen(){try{const v=localStorage.getItem(GENRE_KEY);if(v!==null)return v==="1"}catch(_){}return !matchMedia("(max-width:760px)").matches}
+S.genreOpen=readGenreOpen();
+function renderGenreToggle(){
+  const g=$("genreGroup");if(!g)return;
+  g.classList.toggle("collapsed",!S.genreOpen);
+  $("genreToggle").setAttribute("aria-expanded",String(S.genreOpen));
+  $("genreSel").textContent=S.genreOpen?"":(S.genre?`· ${S.genre}`:"· ALL");
+  $("genreHint").textContent=S.genreOpen?"접기":"펼치기";
+}
 function renderFilters(){
   $("dateTags").innerHTML=DATE_OPTS.map(o=>`<button class="tag kr" data-date="${o.id}" aria-pressed="${!S.pick&&S.date===o.id}">${o.label}</button>`).join("")+
     `<label class="tag kr" aria-pressed="${!!S.pick}"><select id="pick" aria-label="연도와 월 선택"><option value="">날짜 선택</option>${monthOptions().map(m=>`<option value="${m}" ${m===S.pick?"selected":""}>${m.replace("-",".")}</option>`).join("")}</select></label>`;
   const gc={};list("genre").forEach(e=>(e.genres||[]).forEach(g=>gc[g]=(gc[g]||0)+1));
   $("genreTags").innerHTML=`<button class="tag" data-genre="" aria-pressed="${!S.genre}">ALL</button>`+
     GENRES.filter(g=>gc[g]||g===S.genre).map(g=>`<button class="tag${hl(g)}" data-genre="${esc(g)}" aria-pressed="${S.genre===g}">${esc(g)} <span class="n">${gc[g]||0}</span></button>`).join("");
+  renderGenreToggle();
 }
 function genInner(e){return `<span>${md(e.start)} ${wd(e.start)}</span><b>${esc(e.title)}</b>`}
 /* default poster: config.js 의 defaultPoster 이미지가 있으면 플라이어 없는 일정에 사용 */
@@ -409,6 +420,7 @@ document.addEventListener("click",ev=>{
 });
 $("dateTags").addEventListener("click",e=>{const b=e.target.closest("[data-date]");if(!b)return;S.date=b.dataset.date;S.pick="";S.shown=PAGE;render()});
 $("dateTags").addEventListener("change",e=>{if(e.target.id==="pick"){S.pick=e.target.value;S.shown=PAGE;render()}});
+$("genreToggle").addEventListener("click",()=>{S.genreOpen=!S.genreOpen;try{localStorage.setItem(GENRE_KEY,S.genreOpen?"1":"0")}catch(_){}renderGenreToggle()});
 $("genreTags").addEventListener("click",e=>{const b=e.target.closest("[data-genre]");if(!b)return;S.genre=b.dataset.genre;S.shown=PAGE;render()});
 let qT;$("q").addEventListener("input",e=>{clearTimeout(qT);qT=setTimeout(()=>{S.q=e.target.value.trim();S.shown=PAGE;render()},120)});
 $("moreBtn").onclick=()=>{S.shown+=PAGE;renderGrid()};
@@ -677,11 +689,11 @@ function renderCrew(){
   const [ws,we]=weekRange(),t=today();
   const list=[...S.events.values()].filter(e=>e.start<=we&&endOf(e)>=ws&&endOf(e)>=t&&countOf(e.id)>0)
     .sort((a,b)=>a.start.localeCompare(b.start)||(a.time||"99").localeCompare(b.time||"99"));
-  const head=`<div class="crew-h"><b>이번 주 크루 동선</b><span>${md(ws)} – ${md(we)}</span></div>`;
+  const head=`<div class="crew-h"><b>이번 주 개미지옥 동선</b><span>${md(ws)} – ${md(we)}</span></div>`;
   if(canSeeCrew()){
     if(!S.loaded){box.innerHTML="";return}
-    if(!list.length){box.innerHTML=`<section class="crew" aria-label="이번 주 크루 동선">${head}<div class="crew-empty">이번 주는 아직 조용해요. 가고 싶은 행사에 갈래요를 눌러 보세요.</div></section>`;return}
-    box.innerHTML=`<section class="crew" aria-label="이번 주 크루 동선">${head}${list.map(e=>{
+    if(!list.length){box.innerHTML=`<section class="crew" aria-label="이번 주 개미지옥 동선">${head}<div class="crew-empty">이번 주는 아직 조용해요. 가고 싶은 행사에 갈래요를 눌러 보세요.</div></section>`;return}
+    box.innerHTML=`<section class="crew" aria-label="이번 주 개미지옥 동선">${head}${list.map(e=>{
       const d=e.start<ws?ws:e.start,n=countOf(e.id);
       return `<button class="crow" data-open="${esc(e.id)}"><span class="cd">${wd(d)}<b>${parse(d).getDate()}</b></span>
         <span style="min-width:0"><span class="ct" style="display:block">${esc(e.title)}</span><span class="cm" style="display:block">${esc([e.venue,e.time].filter(Boolean).join(" · "))}</span></span>
@@ -690,9 +702,9 @@ function renderCrew(){
   }
   if(!list.length||!sb){box.innerHTML="";return}
   const total=list.reduce((s,e)=>s+countOf(e.id),0);
-  box.innerHTML=`<section class="crew" aria-label="이번 주 크루 동선">${head}${list.slice(0,3).map(e=>{const d=e.start<ws?ws:e.start;
+  box.innerHTML=`<section class="crew" aria-label="이번 주 개미지옥 동선">${head}${list.slice(0,3).map(e=>{const d=e.start<ws?ws:e.start;
     return `<button class="crow" data-open="${esc(e.id)}"><span class="cd">${wd(d)}<b>${parse(d).getDate()}</b></span><span style="min-width:0"><span class="ct" style="display:block">${esc(e.title)}</span><span class="cm" style="display:block">${esc(e.venue||"")}</span></span><span class="cn">${countOf(e.id)}명</span></button>`}).join("")}
-    <div class="crew-cta"><p>${ghosts(total)}<span>이번 주 크루 ${total}명이 움직여요. 누가 가는지는 멤버만 볼 수 있어요.</span></p>
+    <div class="crew-cta"><p>${ghosts(total)}<span>이번 주 개미지옥 ${total}명이 움직여요. 누가 가는지는 멤버만 볼 수 있어요.</span></p>
     <button class="pill kakao-login lg" type="button" data-kakao="1"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4C7 4 3 7.1 3 11c0 2.5 1.7 4.7 4.2 5.9L6.5 20l3.6-2.3c.6.1 1.2.1 1.9.1 5 0 9-3.1 9-7s-4-6.8-9-6.8z" fill="currentColor"/></svg>${S.user?"멤버 가입하고 같이 가는 사람 보기":"카카오로 시작하고 누가 가는지 보기"}</button></div></section>`;
 }
 
@@ -824,7 +836,7 @@ function renderMe(){
     <div class="mehead">${avatar(m)}<span style="min-width:0;flex:1"><b>${esc(m.nickname)}</b> <span class="badge-me">멤버</span><small>${[m.instagram?"@"+esc(m.instagram):"",esc((m.genres||[]).join(", "))].filter(Boolean).join(" · ")||"프로필을 채워 보세요"}</small></span></div>
     <div class="segtabs" role="group" aria-label="내 일정"><button type="button" data-metab="up" aria-pressed="${S.meTab!=="past"}">다가오는 ${up.length}</button><button type="button" data-metab="past" aria-pressed="${S.meTab==="past"}">다녀온 ${past.length}</button></div>
     <div class="mylist">${list.length?list.map(e=>{const n=countOf(e.id)-1;return `<button type="button" class="dli" data-open="${esc(e.id)}"><div class="th" aria-hidden="true">${flyerHTML(e)}</div><div style="min-width:0"><div class="t">${esc(e.title)}</div><div class="m">${md(e.start)} ${wd(e.start)}${e.venue?" · "+esc(e.venue):""}</div><div class="attline">${n>0?`나 외 ${n}명`:"아직 나 혼자"}</div></div></button>`}).join("")
-      :`<div class="crew-empty" style="border:0">${S.meTab==="past"?"다녀온 행사가 아직 없어요.":"아직 갈래요한 행사가 없어요. 이번 주 크루 동선에서 골라 보세요."}</div>`}</div>
+      :`<div class="crew-empty" style="border:0">${S.meTab==="past"?"다녀온 행사가 아직 없어요.":"아직 갈래요한 행사가 없어요. 이번 주 개미지옥 동선에서 골라 보세요."}</div>`}</div>
     <div class="melinks"><button type="button" class="pill kr" id="meEdit">프로필 수정</button><button type="button" class="pill kr" id="meLogout">로그아웃</button></div>
     ${S.leaving?`<div class="confirm">탈퇴하면 프로필과 갈래요 기록이 바로 지워지고 되돌릴 수 없어요.<div class="acts"><button type="button" class="pill danger kr" id="leaveYes">탈퇴하기</button><button type="button" class="pill kr" id="leaveNo">취소</button></div></div>`
       :`<div class="textlinks"><button type="button" id="meLeave">탈퇴하기</button></div>`}

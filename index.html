@@ -623,6 +623,16 @@ main .wrap>.head{margin-top:16px}
 .ft-socials{display:flex;flex-wrap:wrap;align-items:center;gap:12px 32px}
 .ft-insta .ig.kk{background:#fee500;color:#191600}
 @media (max-width:480px){.ft-socials{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}.ft-socials .ft-insta{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center}.ft-socials a.pill{min-width:96px;justify-content:center}}
+
+/* genre collapse */
+.gtoggle{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;padding:0;text-align:left;cursor:pointer}
+.gtoggle .gsel{color:var(--violet-2);letter-spacing:.06em}
+.gtoggle .ghint{margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-family:var(--body);font-size:12px;letter-spacing:0;color:var(--muted);text-transform:none}
+.gtoggle svg{transform:rotate(180deg);transition:transform .2s}
+.gtoggle:hover .ghint{color:var(--fg)}
+#genreGroup.collapsed .gtoggle svg{transform:none}
+#genreGroup.collapsed #genreTags{display:none}
+@media (prefers-reduced-motion:reduce){.gtoggle svg{transition:none}}
 </style>
 
 </head>
@@ -657,7 +667,7 @@ main .wrap>.head{margin-top:16px}
       <label class="search"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m11 11 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         <input id="q" type="search" placeholder="행사, 장소, 아티스트 검색" aria-label="일정 검색" autocomplete="off"></label>
       <div class="group" id="dateGroup"><span class="lab">DATE</span><div class="tags" id="dateTags"></div></div>
-      <div class="group"><span class="lab">GENRE</span><div class="tags" id="genreTags"></div></div>
+      <div class="group" id="genreGroup"><button type="button" class="lab gtoggle" id="genreToggle" aria-expanded="true" aria-controls="genreTags"><span>GENRE</span><span class="gsel" id="genreSel"></span><span class="ghint"><span id="genreHint">접기</span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button><div class="tags" id="genreTags"></div></div>
     </section>
     <div class="status" id="status" hidden></div>
     <div class="listview" id="listView">
@@ -855,6 +865,6 @@ main .wrap>.head{margin-top:16px}
 <script defer src="/_vercel/insights/script.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>
