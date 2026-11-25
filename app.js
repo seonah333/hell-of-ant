@@ -102,9 +102,11 @@ document.addEventListener("error",ev=>{const img=ev.target;if(!(img instanceof H
 /* NEXT UP 배너: 오늘 행사가 여러 개면 자동으로 넘겨 보여줘요 */
 const ROTATE_MS=4000;
 let nextTimer=null,nextIdx=0,nextKey="",nextPaused=false;
+let lastNextId=null;
 function nextInner(e,label){
+  const anim=lastNextId!==null&&lastNextId!==e.id;lastNextId=e.id;
   return `<div class="dd">${label}</div>
-    <div class="rot" style="min-width:0"><div class="k">${label==="TODAY"?(e.end&&e.end>e.start?`${md(e.start)} – ${md(e.end)}`:`${md(e.start)} ${wd(e.start)}`):`NEXT UP · ${md(e.start)} ${wd(e.start)}`}</div><div class="t">${esc(e.title)}</div>${e.venue?`<div class="m">${esc(e.venue)}</div>`:""}</div>
+    <div class="rot${anim?" anim":""}" style="min-width:0"><div class="k">${label==="TODAY"?(e.end&&e.end>e.start?`${md(e.start)} – ${md(e.end)}`:`${md(e.start)} ${wd(e.start)}`):`NEXT UP · ${md(e.start)} ${wd(e.start)}`}</div><div class="t">${esc(e.title)}</div>${e.venue?`<div class="m">${esc(e.venue)}</div>`:""}</div>
     <span class="go">자세히 보기 →</span>`;
 }
 function renderNext(){
@@ -144,12 +146,10 @@ function renderGrid(){
     return `<button class="card${endOf(e)<t?" past":""}" data-open="${esc(e.id)}">
       <div class="flyer">${flyerHTML(e)}</div>
       <div class="cbody">
-        ${e.venue?`<div class="venue">${esc(e.venue)}</div>`:""}
         <div class="date">${md(e.start)} ${wd(e.start)}${range}</div>
         <div class="ctitle">${esc(e.title)}</div>
-        ${e.time?`<div class="ctime">${esc(e.time)}</div>`:""}
-        ${(e.genres||[]).length?gtags(e.genres):""}
-        ${attLine(e)}
+        <div class="cmeta">${esc([e.venue,e.time].filter(Boolean).join(" · "))||"&nbsp;"}</div>
+        <div class="cfoot">${(e.genres||[]).length?gtags(e.genres):""}${attLine(e)}</div>
       </div></button>`;
   }).join("");
   $("moreBtn").hidden=items.length<=S.shown;
@@ -425,6 +425,11 @@ $("genreTags").addEventListener("click",e=>{const b=e.target.closest("[data-genr
 let qT;$("q").addEventListener("input",e=>{clearTimeout(qT);qT=setTimeout(()=>{S.q=e.target.value.trim();S.shown=PAGE;render()},120)});
 $("moreBtn").onclick=()=>{S.shown+=PAGE;renderGrid()};
 $("addBtn").onclick=()=>requestAdd();
+(function fab(){
+  const b=$("addBtn");let ticking=false;
+  const upd=()=>{ticking=false;b.classList.toggle("mini",scrollY>120)};
+  addEventListener("scroll",()=>{if(!ticking){ticking=true;requestAnimationFrame(upd)}},{passive:true});upd();
+})();
 $("copyBtn").onclick=copyShareUrl;
 $("shareUrl").addEventListener("focus",e=>e.target.select());
 $("kakaoShareBtn").onclick=kakaoShare;
@@ -651,7 +656,7 @@ function renderAccount(){
   mb.hidden=!(S.isKakao||guest);
   mb.classList.toggle("guest",guest);
   mb.setAttribute("aria-label",guest?"로그인":"내 정보");
-  if(guest)mb.innerHTML='<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  if(guest)mb.innerHTML='<svg width="17" height="17" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.4" r="2.8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M2.8 14c.6-2.8 2.8-4.3 5.2-4.3s4.6 1.5 5.2 4.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
   else if(S.isKakao)mb.innerHTML=avatar(S.member||{nickname:kakaoName()});
 }
 const kakaoName=()=>S.user?.user_metadata?.name||S.user?.user_metadata?.full_name||S.user?.user_metadata?.nickname||"";
@@ -683,8 +688,10 @@ function weekRange(){
   const d=parse(today()),dow=(d.getDay()+6)%7;d.setDate(d.getDate()-dow);
   const start=ymd(d);return [start,addDays(start,6)];
 }
+const SHOW_CREW=false; // 초반 참여 인원이 적어서 잠시 숨김. true 로 바꾸면 다시 보여요
 function renderCrew(){
   const box=$("crewBox");if(!box)return;
+  if(!SHOW_CREW){box.innerHTML="";return}
   if(S.member?.status==="blocked"){box.innerHTML=`<div class="notice">이용이 제한된 계정이에요. 운영진에게 인스타그램 DM으로 문의해 주세요.</div>`;return}
   const [ws,we]=weekRange(),t=today();
   const list=[...S.events.values()].filter(e=>e.start<=we&&endOf(e)>=ws&&endOf(e)>=t&&countOf(e.id)>0)
