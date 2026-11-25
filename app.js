@@ -29,7 +29,7 @@ const uuid=()=>(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Ma
 /* ---------- state ---------- */
 const VIEW_KEY="hoa_view";
 const readView=()=>{try{return localStorage.getItem(VIEW_KEY)==="cal"?"cal":"list"}catch(_){return "list"}};
-const S={events:new Map(),pending:[],q:"",date:"upcoming",pick:"",genre:"",shown:PAGE,open:null,confirm:false,view:readView(),calMonth:"",sel:"",member:null,isKakao:false,counts:new Map(),att:new Map(),myAtt:new Set(),meTab:"up",peopleQ:"",adminMembers:null,memberQ:"",blocking:null,reviewTab:"events",leaving:false,
+const S={events:new Map(),pending:[],q:"",date:"upcoming",pick:"",genres:new Set(),shown:PAGE,open:null,confirm:false,view:readView(),calMonth:"",sel:"",member:null,isKakao:false,counts:new Map(),att:new Map(),myAtt:new Set(),meTab:"up",peopleQ:"",adminMembers:null,memberQ:"",blocking:null,reviewTab:"events",leaving:false,
   editing:null,editingPending:false,rejecting:null,loaded:false,user:null,isAdmin:false,adminName:"",flyer:{path:null,file:null,url:null}};
 
 const CFG=window.HOA_CONFIG||{};
@@ -55,12 +55,13 @@ function inDate(e){
     default:return end>=t;
   }
 }
+function genreHit(e){return !S.genres.size||(e.genres||[]).some(g=>S.genres.has(g))}
 function textHit(e){if(!S.q)return true;const q=S.q.toLowerCase();return [e.title,e.venue,e.memo,e.credit,(e.genres||[]).join(" ")].some(v=>String(v||"").toLowerCase().includes(q))}
 function list(ignore){
   const out=[];
   for(const [,e] of S.events){
     if(!inDate(e)||!textHit(e))continue;
-    if(ignore!=="genre"&&S.genre&&!(e.genres||[]).includes(S.genre))continue;
+    if(ignore!=="genre"&&!genreHit(e))continue;
     out.push(e);
   }
   const past=S.date==="past"&&!S.pick;
@@ -75,15 +76,15 @@ function renderGenreToggle(){
   const g=$("genreGroup");if(!g)return;
   g.classList.toggle("collapsed",!S.genreOpen);
   $("genreToggle").setAttribute("aria-expanded",String(S.genreOpen));
-  $("genreSel").textContent=S.genreOpen?"":(S.genre?`· ${S.genre}`:"· ALL");
+  $("genreSel").textContent=S.genreOpen?"":(S.genres.size?`· ${[...S.genres][0]}${S.genres.size>1?` 외 ${S.genres.size-1}`:""}`:"· ALL");
   $("genreHint").textContent=S.genreOpen?"접기":"펼치기";
 }
 function renderFilters(){
   $("dateTags").innerHTML=DATE_OPTS.map(o=>`<button class="tag kr" data-date="${o.id}" aria-pressed="${!S.pick&&S.date===o.id}">${o.label}</button>`).join("")+
     `<label class="tag kr" aria-pressed="${!!S.pick}"><select id="pick" aria-label="연도와 월 선택"><option value="">날짜 선택</option>${monthOptions().map(m=>`<option value="${m}" ${m===S.pick?"selected":""}>${m.replace("-",".")}</option>`).join("")}</select></label>`;
   const gc={};list("genre").forEach(e=>(e.genres||[]).forEach(g=>gc[g]=(gc[g]||0)+1));
-  $("genreTags").innerHTML=`<button class="tag" data-genre="" aria-pressed="${!S.genre}">ALL</button>`+
-    GENRES.filter(g=>gc[g]||g===S.genre).map(g=>`<button class="tag${hl(g)}" data-genre="${esc(g)}" aria-pressed="${S.genre===g}">${esc(g)} <span class="n">${gc[g]||0}</span></button>`).join("");
+  $("genreTags").innerHTML=`<button class="tag" data-genre="" aria-pressed="${!S.genres.size}">ALL</button>`+
+    GENRES.filter(g=>gc[g]||S.genres.has(g)).map(g=>`<button class="tag${hl(g)}" data-genre="${esc(g)}" aria-pressed="${S.genres.has(g)}">${esc(g)} <span class="n">${gc[g]||0}</span></button>`).join("");
   renderGenreToggle();
 }
 function genInner(e){return `<span>${md(e.start)} ${wd(e.start)}</span><b>${esc(e.title)}</b>`}
@@ -157,7 +158,7 @@ function renderGrid(){
   if(items.length){blank.hidden=true;return}
   blank.hidden=false;
   if(sb&&!S.loaded){blank.innerHTML=`<b>LOADING</b>일정을 불러오는 중이에요…`;return}
-  const filtered=S.q||S.genre||S.pick||S.date!=="upcoming";
+  const filtered=S.q||S.genres.size||S.pick||S.date!=="upcoming";
   blank.innerHTML=filtered&&S.events.size?`<b>NO EVENTS</b>조건에 맞는 일정이 없어요.<button class="pill kr" id="resetBtn">필터 초기화</button>`
     :`<b>NO EVENTS YET</b>가고 싶은 공연이나 파티를 제보해 주세요. 운영진이 확인한 뒤 게시해요.${sb?`<button class="pill solid" id="emptyAdd">+ ADD EVENT</button>`:""}`;
 }
@@ -185,7 +186,7 @@ const KWD=["일","월","화","수","목","금","토"];
 const monthAdd=(m,n)=>{const [y,mo]=m.split("-").map(Number);const d=new Date(y,mo-1+n,1);return `${d.getFullYear()}-${pad(d.getMonth()+1)}`};
 function calEvents(){
   const out=[];
-  for(const [,e] of S.events){if(!textHit(e))continue;if(S.genre&&!(e.genres||[]).includes(S.genre))continue;out.push(e)}
+  for(const [,e] of S.events){if(!textHit(e))continue;if(!genreHit(e))continue;out.push(e)}
   return out.sort((a,b)=>a.start.localeCompare(b.start)||(a.time||"99").localeCompare(b.time||"99"));
 }
 function onDay(evs,day){return evs.filter(e=>e.start<=day&&endOf(e)>=day)}
@@ -222,7 +223,7 @@ function renderDayPanel(evs,inMonth){
     if(sb&&!S.loaded)body="일정을 불러오는 중이에요…";
     else if(!inMonth.length){
       const nextEv=evs.find(e=>ym(e.start)>S.calMonth),prevEv=[...evs].reverse().find(e=>ym(endOf(e))<S.calMonth);
-      const filtered=S.q||S.genre;
+      const filtered=S.q||S.genres.size;
       body=`${filtered?"조건에 맞는 일정이 이 달엔 없어요.":"이 달엔 아직 일정이 없어요."}`+
         (nextEv?`<button type="button" class="pill" data-cal-go="${ym(nextEv.start)}">다음 일정 있는 달로 →</button>`:prevEv?`<button type="button" class="pill" data-cal-go="${ym(prevEv.start)}">← 이전 일정 있는 달로</button>`:"")+
         (filtered?`<button type="button" class="pill kr" id="resetBtn">필터 초기화</button>`:"");
@@ -415,13 +416,13 @@ async function uploadFlyer(file,folder){
 /* ---------- interactions ---------- */
 document.addEventListener("click",ev=>{
   const o=ev.target.closest("[data-open]");if(o){openDetail(o.dataset.open);return}
-  if(ev.target.id==="resetBtn"){S.q="";$("q").value="";S.genre="";S.pick="";S.date="upcoming";S.shown=PAGE;render()}
+  if(ev.target.id==="resetBtn"){S.q="";$("q").value="";S.genres.clear();S.pick="";S.date="upcoming";S.shown=PAGE;render()}
   if(ev.target.closest("#emptyAdd"))requestAdd();
 });
 $("dateTags").addEventListener("click",e=>{const b=e.target.closest("[data-date]");if(!b)return;S.date=b.dataset.date;S.pick="";S.shown=PAGE;render()});
 $("dateTags").addEventListener("change",e=>{if(e.target.id==="pick"){S.pick=e.target.value;S.shown=PAGE;render()}});
 $("genreToggle").addEventListener("click",()=>{S.genreOpen=!S.genreOpen;try{localStorage.setItem(GENRE_KEY,S.genreOpen?"1":"0")}catch(_){}renderGenreToggle()});
-$("genreTags").addEventListener("click",e=>{const b=e.target.closest("[data-genre]");if(!b)return;S.genre=b.dataset.genre;S.shown=PAGE;render()});
+$("genreTags").addEventListener("click",e=>{const b=e.target.closest("[data-genre]");if(!b)return;const g=b.dataset.genre;if(!g)S.genres.clear();else S.genres.has(g)?S.genres.delete(g):S.genres.add(g);S.shown=PAGE;render()});
 let qT;$("q").addEventListener("input",e=>{clearTimeout(qT);qT=setTimeout(()=>{S.q=e.target.value.trim();S.shown=PAGE;render()},120)});
 $("moreBtn").onclick=()=>{S.shown+=PAGE;renderGrid()};
 $("addBtn").onclick=()=>requestAdd();
